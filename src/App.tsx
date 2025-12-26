@@ -511,27 +511,48 @@ export default function App() {
         { Parametro: "Reinvestimento a Scadenza", Valore: reinvestExpired ? "Sì" : "No" }
     ];
 
+    // Helper per applicare formattazione numerica alle celle
+    const formatSheet = (ws: any) => {
+        if (!ws['!ref']) return;
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const headerCell = ws[XLSX.utils.encode_cell({c: C, r: 0})];
+            const headerText = headerCell ? String(headerCell.v).toLowerCase() : '';
+            
+            // Salta formattazione per colonne che non sono importi valutari
+            if (headerText.includes('anno') || headerText.includes('rata') || headerText.includes('n.')) {
+                continue;
+            }
+
+            for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+                const cell = ws[XLSX.utils.encode_cell({c: C, r: R})];
+                if (cell && cell.t === 'n') {
+                    cell.z = '#,##0.00'; // Formato: migliaia e 2 decimali
+                }
+            }
+        }
+    };
+
     // 3. Creazione Workbook
     const wb = XLSX.utils.book_new();
     
     // Foglio Dati
     const wsData = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.sheet_add_aoa(wsData, [headers], { origin: "A1" });
+    formatSheet(wsData);
     XLSX.utils.book_append_sheet(wb, wsData, "Dati Simulazione");
 
     // Foglio Parametri
     const wsInfo = XLSX.utils.json_to_sheet(infoRows);
     XLSX.utils.book_append_sheet(wb, wsInfo, "Parametri");
 
-    // 4. Fogli Dettaglio Rendita (Novità)
+    // 4. Fogli Dettaglio Rendita
     selectedProducts.forEach(code => {
         const prod = BFP_CATALOG[code];
         if (prod.type === 'annuity') {
-            // Calcola il piano (logica duplicata, idealmente da refactorizzare, ma ok per ora)
             const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
             const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
             if (yearsTo65 + new Date().getFullYear() <= new Date().getFullYear() + customDuration) {
-                 // Calcolo Montante 65
                  const limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
                  const infRate = parseFloat(String(inflationRate));
                  const effInf = isNaN(infRate) ? 0 : infRate / 100;
@@ -541,10 +562,8 @@ export default function App() {
                     invested * Math.pow(1 + effInf, limitYear)
                  );
                  const net = gross - ((gross - invested) * 0.125);
-                 
                  const schedule = generateAnnuitySchedule(net, birthYear, code);
                  
-                 // Prepara dati per Excel
                  const scheduleRows = schedule.map(s => ({
                      "N. Rata": s.id,
                      "Data": s.date,
@@ -557,7 +576,7 @@ export default function App() {
                  }));
 
                  const wsAnnuity = XLSX.utils.json_to_sheet(scheduleRows);
-                 // Tronca nome foglio a 31 caratteri (limite Excel)
+                 formatSheet(wsAnnuity);
                  const sheetName = `Rendita ${prod.name}`.slice(0, 30); 
                  XLSX.utils.book_append_sheet(wb, wsAnnuity, sheetName);
             }
