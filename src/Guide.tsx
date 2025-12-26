@@ -96,9 +96,14 @@ export default function Guide() {
             </div>
             <div className="p-3 bg-slate-50 rounded border">
                 <strong className="text-slate-800">La Tabella</strong>
-                <p className="text-sm mt-1">Confronta i numeri esatti a scadenza: capitale investito, guadagno netto e valore reale (potere d'acquisto).</p>
+                <p className="text-sm mt-1">Confronta i numeri esatti. Per i prodotti rendita, troverai l'icona <Highlight>Lista</Highlight> per aprire il piano di ammortamento mensile.</p>
             </div>
         </div>
+
+        <SubTitle>Esportazione Avanzata</SubTitle>
+        <p>
+            Il pulsante <Highlight>Esporta Excel</Highlight> genera un report completo. Se sono presenti prodotti rendita (BSFed/BFPO65), il file conterrà <strong>fogli dedicati</strong> con l'intero piano di ammortamento delle 180 rate.
+        </p>
       </Section>
 
       {/* CAPITOLO 4: DETTAGLI TECNICI */}
@@ -113,8 +118,8 @@ export default function Guide() {
 
         <SubTitle>Rata Mensile (Rendita)</SubTitle>
         <p>
-            Per prodotti come <strong>Obiettivo 65</strong> o <strong>Soluzione Futuro</strong>, la tabella mostra una colonna extra: <em>Rata Mensile</em>.
-            Questa stima appare <strong>solo se</strong> la simulazione raggiunge il tuo 65° anno di età. Se l'orizzonte è troppo breve, vedrai "DAI 65 ANNI".
+            Per prodotti come <strong>Obiettivo 65</strong> o <strong>Soluzione Futuro</strong>, la stima della rata non è una semplice divisione. 
+            Il calcolo segue un <strong>piano di ammortamento alla francese</strong> a rata costante: il capitale residuo continua a maturare interessi (es. 3,5% per BSFed) anche durante i 15 anni di erogazione, aumentando l'importo totale che riceverai.
         </p>
 
         <SubTitle>Funzione "Reinvesti a scadenza"</SubTitle>
