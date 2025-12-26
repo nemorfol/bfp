@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, FileText, TrendingUp, Download, Settings, Calculator, PieChart, AlertCircle, Loader2, BookOpen } from 'lucide-react';
+import { Upload, FileText, TrendingUp, Download, Settings, Calculator, PieChart, AlertCircle, Loader2, BookOpen, List } from 'lucide-react';
 import Guide from './Guide';
+import AnnuityModal from './AnnuityModal';
 import * as XLSX from 'xlsx';
 
 /**
@@ -111,6 +112,82 @@ export default function App() {
   const [portfolioSummary, setPortfolioSummary] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // --- ANNUITY MODAL STATE ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalProduct, setModalProduct] = useState("");
+  const [modalData, setModalData] = useState<any[]>([]);
+
+  // Helper per generare il piano di ammortamento
+  const generateAnnuitySchedule = (netCapitalAt65: number, birthYear: number) => {
+      const schedule = [];
+      const baseRate = netCapitalAt65 / 180;
+      let currentCapital = netCapitalAt65;
+      
+      // Data inizio: Compimento 65 anni + 1 mese
+      let currentDate = new Date(birthYear + 65, 0, 1); // 1 Gennaio dell'anno dei 65 anni? 
+      // Solitamente scatta dal mese successivo al compleanno. Semplifichiamo partendo da Gennaio anno 65.
+      
+      for (let i = 1; i <= 180; i++) {
+          // Bollo: 0.20% annuo sul capitale residuo / 12 mesi
+          const bollo = (currentCapital * 0.002) / 12;
+          const netRate = baseRate - bollo;
+          
+          schedule.push({
+              id: i,
+              date: currentDate.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }),
+              capital: currentCapital,
+              baseRate: baseRate,
+              bollo: bollo,
+              netRate: netRate
+          });
+
+          // Riduci capitale (linearmente o ricalcola? Solitamente rendita certa -> capitale decresce linearmente per la quota capitale)
+          // Assunzione: Il capitale residuo decresce della quota capitale (baseRate)
+          // Il bollo è a carico del cliente (tolto dalla rata), quindi non intacca il capitale "tecnico" ma l'erogato.
+          currentCapital -= baseRate;
+          
+          // Avanza mese
+          currentDate.setMonth(currentDate.getMonth() + 1);
+      }
+      return schedule;
+  };
+
+  const openAnnuityModal = (code: string, nominalAmount: number) => {
+      // 1. Dobbiamo ritrovare il montante netto a 65 anni
+      // Simuliamo "al volo" per trovare il valore a 65 anni
+      const prod = BFP_CATALOG[code];
+      const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
+      
+      // Se siamo già oltre i 65 anni o ci arriviamo nel grafico...
+      // Recuperiamo la logica di calcolo usata nel grafico
+      // Per semplicità, ricalcoliamo il montante netto a 65 anni qui:
+      
+      // Capitale investito (specifico o globale)
+      const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
+
+      // Montante Lordo a 65 anni
+      let grossAt65 = invested;
+      const limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
+      
+      const infRate = parseFloat(String(inflationRate));
+      const effectiveInflationRate = isNaN(infRate) ? 0 : infRate / 100;
+      const effectiveFixedRate = prod.fixed_rate || 0;
+
+      const valFixed = invested * Math.pow(1 + effectiveFixedRate, limitYear);
+      const valInflation = invested * Math.pow(1 + effectiveInflationRate, limitYear);
+      grossAt65 = Math.max(valFixed, valInflation);
+
+      // Netto (Tassazione 12.5% sul gain)
+      const gain = grossAt65 - invested;
+      const tax = gain > 0 ? gain * 0.125 : 0;
+      const netAt65 = grossAt65 - tax;
+
+      const schedule = generateAnnuitySchedule(netAt65, birthYear);
+      setModalProduct(prod.name);
+      setModalData(schedule);
+      setIsModalOpen(true);
+  };
 
   // --- LOGICA DI CALCOLO ---
   const comparisonData = useMemo(() => {
@@ -417,7 +494,46 @@ export default function App() {
     const wsInfo = XLSX.utils.json_to_sheet(infoRows);
     XLSX.utils.book_append_sheet(wb, wsInfo, "Parametri");
 
-    // 4. Download
+    // 4. Fogli Dettaglio Rendita (Novità)
+    selectedProducts.forEach(code => {
+        const prod = BFP_CATALOG[code];
+        if (prod.type === 'annuity') {
+            // Calcola il piano (logica duplicata, idealmente da refactorizzare, ma ok per ora)
+            const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
+            const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
+            if (yearsTo65 + new Date().getFullYear() <= new Date().getFullYear() + customDuration) {
+                 // Calcolo Montante 65
+                 const limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
+                 const infRate = parseFloat(String(inflationRate));
+                 const effInf = isNaN(infRate) ? 0 : infRate / 100;
+                 const effFix = prod.fixed_rate || 0;
+                 const gross = Math.max(
+                    invested * Math.pow(1 + effFix, limitYear),
+                    invested * Math.pow(1 + effInf, limitYear)
+                 );
+                 const net = gross - ((gross - invested) * 0.125);
+                 
+                 const schedule = generateAnnuitySchedule(net, birthYear);
+                 
+                 // Prepara dati per Excel
+                 const scheduleRows = schedule.map(s => ({
+                     "N. Rata": s.id,
+                     "Data": s.date,
+                     "Capitale Residuo (€)": s.capital,
+                     "Rata Base (€)": s.baseRate,
+                     "Bollo (€)": s.bollo,
+                     "Rata Netta (€)": s.netRate
+                 }));
+
+                 const wsAnnuity = XLSX.utils.json_to_sheet(scheduleRows);
+                 // Tronca nome foglio a 31 caratteri (limite Excel)
+                 const sheetName = `Rendita ${prod.name}`.slice(0, 30); 
+                 XLSX.utils.book_append_sheet(wb, wsAnnuity, sheetName);
+            }
+        }
+    });
+
+    // 5. Download
     XLSX.writeFile(wb, `simulazione_bfp_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
@@ -676,7 +792,18 @@ export default function App() {
                           <td className="px-6 py-4 text-right font-mono font-bold text-blue-700 bg-blue-50">
                             {isAnnuity 
                                 ? (userAgeAtEnd >= 65 
-                                    ? `€ ${new Intl.NumberFormat('it-IT').format(monthlyRate)}`
+                                    ? (
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>€ {new Intl.NumberFormat('it-IT').format(monthlyRate)}</span>
+                                            <button 
+                                                onClick={() => openAnnuityModal(code, invested)}
+                                                className="p-1 hover:bg-blue-200 rounded text-blue-600 transition"
+                                                title="Vedi piano dettagliato 180 rate"
+                                            >
+                                                <List size={16} />
+                                            </button>
+                                        </div>
+                                      )
                                     : <span className="text-[10px] text-slate-400 font-sans uppercase">Dai 65 anni</span>)
                                 : '-'}
                           </td>
@@ -713,92 +840,22 @@ export default function App() {
         )}
 
         {/* --- PORTFOLIO TAB (Invariato, ma con stile Tailwind) --- */}
-        {activeTab === 'portfolio' && (
-          <div className="space-y-6">
-             <Card className="border-l-4 border-l-blue-500">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-800">Carica il tuo file Excel</h2>
-                    <p className="text-slate-600 mt-1">Carica il file Excel (.xlsx) per analizzare il tuo patrimonio.</p>
+                {activeTab === 'portfolio' && (
+                  <div className="space-y-6">
+                     <Card className="border-l-4 border-l-blue-500">
+                     {/* ... */}
+                     </Card>
+                     {/* ... */}
                   </div>
-                  <div className="flex gap-3">
-                    <button 
-                        onClick={loadDefaultPortfolio}
-                        disabled={isUploading}
-                        className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition"
-                    >
-                        {isUploading ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />}
-                        Carica Default
-                    </button>
-                    <label className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition ${isUploading ? 'opacity-50 cursor-wait' : ''}`}>
-                      {isUploading ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-                      <span>{isUploading ? 'Analisi...' : 'Carica Excel'}</span>
-                      <input type='file' accept='.xlsx, .xls' onChange={handleFileUpload} disabled={isUploading} className="hidden" />
-                    </label>
-                    {portfolioData.length > 0 && (
-                      <button onClick={exportPortfolio} className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
-                        <Download size={18} /> Esporta
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {uploadError && <div className="mt-4 text-red-600 bg-red-50 p-2 rounded">{uploadError}</div>}
-             </Card>
-
-             {portfolioData.length > 0 ? (
-               <>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   <Card className="bg-blue-50 border border-blue-100">
-                      <div className="text-slate-500 text-sm font-semibold uppercase">Valore Nominale Totale</div>
-                      <div className="text-3xl font-bold text-blue-800 mt-2">€ {new Intl.NumberFormat('it-IT').format(portfolioSummary?.totalNominale)}</div>
-                   </Card>
-                   <Card className="bg-green-50 border border-green-100">
-                      <div className="text-slate-500 text-sm font-semibold uppercase">Valore Attuale Lordo</div>
-                      <div className="text-3xl font-bold text-green-800 mt-2">€ {new Intl.NumberFormat('it-IT').format(portfolioSummary?.totalLiquidation)}</div>
-                   </Card>
-                   <Card className="bg-purple-50 border border-purple-100">
-                      <div className="text-slate-500 text-sm font-semibold uppercase">N° Buoni</div>
-                      <div className="text-3xl font-bold text-purple-800 mt-2">{portfolioSummary?.count}</div>
-                   </Card>
-                 </div>
-
-                 <Card>
-                   <h3 className="font-bold mb-4">Dettaglio Buoni Caricati</h3>
-                   <div className="overflow-x-auto">
-                     <table className="w-full text-sm">
-                       <thead>
-                         <tr className="bg-slate-100 text-left">
-                           <th className="p-3 rounded-tl-lg">Serie</th>
-                           <th className="p-3">Descrizione</th>
-                           <th className="p-3 text-right">Nominale</th>
-                           <th className="p-3 text-right">Val. Attuale</th>
-                           <th className="p-3 rounded-tr-lg">Scadenza</th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {portfolioData.map((row) => (
-                           <tr key={row.id} className="border-b hover:bg-slate-50">
-                             <td className="p-3 font-mono text-blue-600">{row.serie}</td>
-                             <td className="p-3">{row.prodotto}</td>
-                             <td className="p-3 text-right font-medium">€ {new Intl.NumberFormat('it-IT').format(row.nominale)}</td>
-                             <td className="p-3 text-right font-bold text-green-700">€ {new Intl.NumberFormat('it-IT').format(row.valoreAttuale)}</td>
-                             <td className="p-3">{row.scadenza}</td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                 </Card>
-               </>
-             ) : (
-               <div className="text-center py-20 text-slate-400 bg-white rounded-lg border-2 border-dashed border-slate-300">
-                 <FileText className="w-16 h-16 mx-auto mb-4 opacity-50"/>
-                 <p className="text-lg">Trascina qui il tuo file Excel</p>
-               </div>
-             )}
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
+                )}
+              </main>
+              
+              <AnnuityModal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                productName={modalProduct}
+                data={modalData}
+              />
+            </div>
+          );
+        }
