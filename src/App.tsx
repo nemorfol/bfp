@@ -64,6 +64,20 @@ const BFP_CATALOG: Record<string, any> = {
     duration: 10,
     type: 'inflation_linked',
     spread: 0.006
+  },
+  'TC005A': {
+    name: 'Buono a Cedola 5 Anni',
+    desc: 'Durata 5 anni, cedole semestrali',
+    duration: 5,
+    type: 'step_up', // Semplificazione: trattiamo come step-up per il grafico
+    yields: [0.015, 0.0175, 0.02, 0.0225, 0.025] // STIMA: Tassi crescenti (1.5% -> 2.5%)
+  },
+  'TF106M': {
+    name: 'Buono 6 Mesi',
+    desc: 'Durata 6 mesi, rendimento fisso a scadenza',
+    duration: 0.5, // 6 mesi
+    type: 'fixed_maturity',
+    finalCoeff: 1.015 // STIMA: 1.5% lordo a scadenza (3% annuo)
   }
 };
 
