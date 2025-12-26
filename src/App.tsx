@@ -578,6 +578,7 @@ export default function App() {
                             className={`px-3 py-1 text-sm rounded-md transition ${chartMode === 'real' ? 'bg-white shadow text-blue-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
                         >Solo Reale</button>
                     </div>
+                  </div>
                 </div>
 
                 <div className="flex-1 w-full">
