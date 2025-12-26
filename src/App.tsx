@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Upload, FileText, TrendingUp, Download, Settings, Calculator, PieChart, AlertCircle, Loader2, BookOpen } from 'lucide-react';
 import Guide from './Guide';
+import * as XLSX from 'xlsx';
 
 /**
  * DATI STATICI (Fallback) + Logica Simulazione
@@ -373,6 +374,53 @@ export default function App() {
     link.click();
   };
 
+  const exportSimulation = () => {
+    if (comparisonData.length === 0) return;
+
+    // 1. Preparazione Dati Tabellari
+    const headers = ["Anno"];
+    selectedProducts.forEach(code => {
+        const name = BFP_CATALOG[code].name;
+        headers.push(`${name} - Nominale (€)`);
+        headers.push(`${name} - Reale (€)`);
+    });
+
+    const rows = comparisonData.map(row => {
+        const newRow: any = { "Anno": row.year };
+        selectedProducts.forEach(code => {
+            const name = BFP_CATALOG[code].name;
+            newRow[`${name} - Nominale (€)`] = row[`${code}_nominal`];
+            newRow[`${name} - Reale (€)`] = row[`${code}_real`];
+        });
+        return newRow;
+    });
+
+    // 2. Preparazione Foglio Info/Parametri
+    const infoRows = [
+        { Parametro: "Data Simulazione", Valore: new Date().toLocaleDateString() },
+        { Parametro: "Capitale Iniziale", Valore: simulationAmount },
+        { Parametro: "Inflazione Stimata", Valore: `${inflationRate}%` },
+        { Parametro: "Durata", Valore: `${customDuration} anni` },
+        { Parametro: "Anno Nascita", Valore: birthYear },
+        { Parametro: "Reinvestimento a Scadenza", Valore: reinvestExpired ? "Sì" : "No" }
+    ];
+
+    // 3. Creazione Workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Foglio Dati
+    const wsData = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.sheet_add_aoa(wsData, [headers], { origin: "A1" });
+    XLSX.utils.book_append_sheet(wb, wsData, "Dati Simulazione");
+
+    // Foglio Parametri
+    const wsInfo = XLSX.utils.json_to_sheet(infoRows);
+    XLSX.utils.book_append_sheet(wb, wsInfo, "Parametri");
+
+    // 4. Download
+    XLSX.writeFile(wb, `simulazione_bfp_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       <header className="bg-blue-800 text-white p-4 shadow-lg sticky top-0 z-10">
@@ -505,8 +553,18 @@ export default function App() {
                 <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
                     <h3 className="text-lg font-semibold text-slate-800">Proiezione Valore</h3>
                     
-                    {/* Controlli Grafico */}
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                    <div className="flex gap-2">
+                        {/* Export Button */}
+                        <button 
+                            onClick={exportSimulation}
+                            className="flex items-center gap-2 px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition shadow-sm"
+                            title="Scarica dati in Excel"
+                        >
+                            <Download size={16}/> Esporta Excel
+                        </button>
+
+                        {/* Controlli Grafico */}
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
                         <button 
                             onClick={() => setChartMode('all')}
                             className={`px-3 py-1 text-sm rounded-md transition ${chartMode === 'all' ? 'bg-white shadow text-blue-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
