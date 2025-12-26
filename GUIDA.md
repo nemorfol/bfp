@@ -26,7 +26,41 @@ Una volta caricato il file, il **Simulatore** si autoconfigura automaticamente:
 
 ---
 
-## 2. Modalità Simulatore Manuale
+## 2. Descrizione dell'Interfaccia
+
+L'applicazione è divisa in tre aree principali per facilitare la navigazione:
+
+### A. Intestazione (Header)
+- **Titolo e Icona**: In alto a sinistra trovi il nome dell'app.
+- **Selettore Tab**: In alto a destra puoi passare tra:
+    - **Simulatore**: Per proiezioni grafiche e confronti.
+    - **Portafoglio**: Per caricare e visualizzare i tuoi buoni reali.
+
+### B. Pannello Parametri Utente (Barra Superiore)
+Questa barra è sempre visibile e influenza tutti i calcoli:
+- **Inflazione Stimata**: Percentuale di inflazione annua (incide sul "Valore Reale").
+- **Anno di Nascita**: Fondamentale per calcolare quando raggiungerai i 65 anni.
+- **Interruttore "Reinvesti a scadenza"**: Cambia il comportamento del capitale dopo la scadenza del buono (vedi sezione 4).
+
+### C. Sezione Simulatore (Griglia Principale)
+Quando sei nella scheda Simulatore, la schermata è divisa in:
+1.  **Colonna Sinistra (Input)**:
+    - **Configura**: Qui imposti il capitale e l'orizzonte temporale (quanti anni vedere nel futuro).
+    - **Seleziona Prodotti**: Una lista scorrevole di tutti i buoni gestiti. Cliccando sulla casella, il prodotto appare istantaneamente nel grafico.
+2.  **Colonna Destra (Risultati)**:
+    - **Grafico Proiezione**: L'area visiva principale. In alto a destra del grafico trovi tre pulsanti (**Tutto, Solo Nominale, Solo Reale**) per filtrare le linee visualizzate.
+    - **Tabella Risultati**: Un riepilogo numerico preciso con la nuova colonna **Rata Mensile** per i prodotti previdenziali.
+    - **Note Tecniche**: Due box colorati in fondo che spiegano dettagli su tassazione e focus sui prodotti.
+
+### D. Sezione Portafoglio
+Quando sei nella scheda Portafoglio:
+- **Area Caricamento**: Pulsanti per caricare il tuo file Excel o un file di esempio ("Carica Default").
+- **Card di Riepilogo**: Tre riquadri colorati (Blu, Verde, Viola) che mostrano i totali del tuo patrimonio a colpo d'occhio.
+- **Tabella Dettaglio**: La lista completa dei tuoi buoni con codice serie e data di scadenza.
+
+---
+
+## 3. Modalità Simulatore Manuale
 Se non hai un file Excel o vuoi ipotizzare nuovi investimenti.
 
 1.  Vai nella scheda **"Simulatore"**.
