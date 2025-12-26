@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, Calendar, DollarSign, PiggyBank, Receipt, TrendingDown } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
 
 interface AnnuityModalProps {
   isOpen: boolean;
