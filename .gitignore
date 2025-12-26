@@ -1,6 +1,16 @@
-node_modules/
-.env
+node_modules
+dist
+dist-ssr
+*.local
+.vscode
+.idea
 .DS_Store
-dist/
-build/
-*.log
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vite
+public/vite.svg
+src/assets/react.svg
