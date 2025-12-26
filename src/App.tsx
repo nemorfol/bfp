@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, FileText, TrendingUp, Download, Settings, Calculator, PieChart, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, TrendingUp, Download, Settings, Calculator, PieChart, AlertCircle, Loader2, BookOpen } from 'lucide-react';
+import Guide from './Guide';
 
 /**
  * DATI STATICI (Fallback) + Logica Simulazione
@@ -390,6 +391,9 @@ export default function App() {
             <button onClick={() => setActiveTab('portfolio')} className={`px-4 py-2 rounded-md transition-all ${activeTab === 'portfolio' ? 'bg-white text-blue-900 shadow' : 'text-blue-300 hover:text-white'}`}>
               <div className="flex items-center gap-2"><PieChart size={18}/> Portafoglio</div>
             </button>
+            <button onClick={() => setActiveTab('guide')} className={`px-4 py-2 rounded-md transition-all ${activeTab === 'guide' ? 'bg-white text-blue-900 shadow' : 'text-blue-300 hover:text-white'}`}>
+              <div className="flex items-center gap-2"><BookOpen size={18}/> Guida</div>
+            </button>
           </div>
         </div>
       </header>
@@ -439,6 +443,8 @@ export default function App() {
              </div>
           </div>
         </div>
+
+        {activeTab === 'guide' && <Guide />}
 
         {activeTab === 'comparator' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
