@@ -1,0 +1,1 @@
+[plugin:vite-plugin-svelte] F:/sviluppo/knex/frontend/src/lib/components/zone/ZoneManagement.svelte:288:22 Unexpected token https://svelte.dev/e/js_parse_error F:/sviluppo/knex/frontend/src/lib/components/zone/ZoneManagement.svelte:288:22 286 |    287 |    let zoneData = [];  288 |    let selectedZone = {};
