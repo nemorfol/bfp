@@ -201,7 +201,6 @@ export default function App() {
 
       if (prod.type === 'coupon') {
           const schedule = [];
-          let currentCapital = invested;
           let totalNet = 0;
           let currentDate = new Date(); // Parte da oggi
 
@@ -240,9 +239,6 @@ export default function App() {
       // Recuperiamo la logica di calcolo usata nel grafico
       // Per semplicità, ricalcoliamo il montante netto a 65 anni qui:
       
-      // Capitale investito (specifico o globale)
-      const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
-
       // Montante Lordo a 65 anni
       let grossAt65 = invested;
       const limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
