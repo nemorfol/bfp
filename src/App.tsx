@@ -359,20 +359,35 @@ export default function App() {
            }
 
            // 2. Se scaduto e reinvestimento attivo, applica inflazione per gli anni extra
-           if (isExpired && reinvestExpired) {
-               const extraYears = year - productDuration;
-               // Reinvestimento neutro: il capitale cresce pari all'inflazione (Valore Reale rimane costante)
-               baseVal = baseVal * Math.pow(1 + inflationRate/100, extraYears);
+           if (isExpired) {
+               if (reinvestExpired) {
+                   const extraYears = year - productDuration;
+                   // Reinvestimento neutro: il capitale cresce pari all'inflazione
+                   baseVal = baseVal * Math.pow(1 + inflationRate/100, extraYears);
+               } else {
+                   // Se NON reinvestiamo, vogliamo interrompere la linea DOPO l'anno di scadenza.
+                   // Ma attenzione: se siamo ESATTAMENTE all'anno di scadenza, dobbiamo mostrare il valore.
+                   // isExpired è true se year > productDuration.
+                   // Quindi qui siamo già negli anni successivi.
+                   // Impostiamo baseVal a null per rompere il grafico.
+                   baseVal = null; 
+               }
            }
            
            grossVal = baseVal;
         }
 
-        const netVal = calculateNet(investedAmount, grossVal);
-        const realVal = netVal / inflationFactor;
+        // Se grossVal è null, passiamo null ai punti grafico
+        if (grossVal === null) {
+            point[`${code}_nominal`] = null;
+            point[`${code}_real`] = null;
+        } else {
+            const netVal = calculateNet(investedAmount, grossVal);
+            const realVal = netVal / inflationFactor;
 
-        point[`${code}_nominal`] = parseFloat(netVal.toFixed(2));
-        point[`${code}_real`] = parseFloat(realVal.toFixed(2));
+            point[`${code}_nominal`] = parseFloat(netVal.toFixed(2));
+            point[`${code}_real`] = parseFloat(realVal.toFixed(2));
+        }
       });
 
       data.push(point);
@@ -879,16 +894,20 @@ export default function App() {
                   </thead>
                   <tbody>
                     {selectedProducts.map((code, index) => {
-                      const finalData = comparisonData[comparisonData.length - 1];
-                      const nominal = finalData[`${code}_nominal`];
-                      const real = finalData[`${code}_real`];
+                      // Trova l'ultimo dato valido (non null) per la tabella
+                      const validDataPoints = comparisonData.filter(d => d[`${code}_nominal`] !== null);
+                      const finalData = validDataPoints[validDataPoints.length - 1] || {};
+                      
+                      const nominal = finalData[`${code}_nominal`] || 0;
+                      const real = finalData[`${code}_real`] || 0;
                       const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
                       const isPositive = real > invested;
                       const color = DISTINCT_COLORS[index % DISTINCT_COLORS.length];
                       
                       // Calcolo Rata solo per prodotti Annuity e solo se si è raggiunta l'età di 65 anni
                       const currentYear = new Date().getFullYear();
-                      const userAgeAtEnd = (currentYear - birthYear) + customDuration;
+                      // Per la rata usiamo la durata del prodotto se è annuity, o l'ultimo anno valido
+                      const userAgeAtEnd = (currentYear - birthYear) + finalData.year; 
                       const isAnnuity = BFP_CATALOG[code].type === 'annuity';
                       const canReceiveAnnuity = isAnnuity && userAgeAtEnd >= 65;
                       const monthlyRate = canReceiveAnnuity ? nominal / 180 : 0;
