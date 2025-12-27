@@ -196,9 +196,44 @@ export default function App() {
   };
 
   const openAnnuityModal = (code: string) => {
-      // 1. Dobbiamo ritrovare il montante netto a 65 anni
-      // Simuliamo "al volo" per trovare il valore a 65 anni
       const prod = BFP_CATALOG[code];
+      const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
+
+      if (prod.type === 'coupon') {
+          const schedule = [];
+          let currentCapital = invested;
+          let totalNet = 0;
+          let currentDate = new Date(); // Parte da oggi
+
+          for (let y = 0; y < prod.duration; y++) {
+              for (let sem = 1; sem <= 2; sem++) {
+                  const annualRate = prod.yields[y];
+                  const gross = (invested * annualRate) / 2;
+                  const net = Math.round((gross * 0.875) * 100) / 100;
+                  // Bollo: 0.20% annuo / 2 (semestrale)
+                  const bollo = (invested * 0.002) / 2;
+                  
+                  schedule.push({
+                      id: (y * 2) + sem,
+                      date: currentDate.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }),
+                      capital: invested, // Il capitale non decresce nel buono a cedola
+                      baseRate: gross,
+                      quotaInteressi: gross,
+                      ritenuta: gross - net,
+                      bollo: bollo,
+                      netRate: net - bollo
+                  });
+                  totalNet += (net - bollo);
+                  currentDate.setMonth(currentDate.getMonth() + 6);
+              }
+          }
+          setModalProduct(prod.name);
+          setModalData(schedule);
+          setIsModalOpen(true);
+          return;
+      }
+
+      // ... logica esistente per annuity (BSFed/BFPO65) ...
       const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
       
       // Se siamo già oltre i 65 anni o ci arriviamo nel grafico...
@@ -277,24 +312,24 @@ export default function App() {
                if (limitYear >= parseInt(stepYear)) bestRate = prod.steps[stepYear as any];
              });
              baseVal = bestRate > 0 ? investedAmount * Math.pow(1 + bestRate, limitYear) : investedAmount;
-           } else if (prod.type === 'fixed_maturity') {
-             baseVal = limitYear === productDuration ? investedAmount * prod.finalCoeff : investedAmount;
            } else if (prod.type === 'coupon') {
              // LOGICA "Buono a Cedola":
-             // Il capitale base rimane invariato (investedAmount).
-             // Aggiungiamo le cedole NETTE incassate fino all'anno corrente per il confronto grafico.
+             // Il capitale base rimane invariato. Calcoliamo le cedole semestrali.
              let accumulatedCouponsNet = 0;
-             prod.yields.forEach((rate: number, idx: number) => {
-                 // Se l'anno della cedola (idx + 1) è già passato o è quello corrente
-                 if (idx + 1 <= limitYear) {
-                     const couponGross = investedAmount * rate;
-                     const couponNet = couponGross * 0.875; // Tassazione 12.5%
-                     accumulatedCouponsNet += couponNet;
+             const totalYears = Math.min(limitYear, prod.duration);
+             
+             for (let y = 0; y < totalYears; y++) {
+                 const annualRate = prod.yields[y];
+                 // Due cedole semestrali per anno
+                 for (let sem = 0; sem < 2; sem++) {
+                     const semesterGross = (investedAmount * annualRate) / 2;
+                     // Tassazione 12.5% con arrotondamento al centesimo (standard Poste)
+                     const semesterNet = Math.round((semesterGross * 0.875) * 100) / 100;
+                     accumulatedCouponsNet += semesterNet;
                  }
-             });
-             // Per il grafico, mostriamo Capitale + Cedole Incassate (come se fosse un accumulo)
-             // Nota: Il "Valore di Rimborso" effettivo sarebbe solo investedAmount, ma per il confronto rendimenti usiamo il totale.
-             grossVal = investedAmount + (accumulatedCouponsNet / 0.875); // Ricostruiamo il lordo fittizio per calculateNet
+             }
+             // Per il grafico ricostruiamo un lordo fittizio che dopo calculateNet ridia il netto corretto
+             grossVal = investedAmount + (accumulatedCouponsNet / 0.875);
            } else if (prod.type === 'inflation_linked') {
              baseVal = investedAmount * Math.pow(1 + inflationRate/100, limitYear) * Math.pow(1 + (prod.spread || 0), limitYear);
            } else if (prod.type === 'annuity') {
@@ -870,15 +905,15 @@ export default function App() {
                             {((real - invested) / invested * 100).toFixed(2)}%
                           </td>
                           <td className="px-6 py-4 text-right font-mono font-bold text-blue-700 bg-blue-50">
-                            {isAnnuity 
-                                ? (userAgeAtEnd >= 65 
+                            {(isAnnuity || BFP_CATALOG[code].type === 'coupon')
+                                ? (userAgeAtEnd >= 65 || BFP_CATALOG[code].type === 'coupon'
                                     ? (
                                         <div className="flex items-center justify-end gap-2">
                                             <span>€ {new Intl.NumberFormat('it-IT').format(monthlyRate)}</span>
                                             <button 
                                                 onClick={() => openAnnuityModal(code)}
                                                 className="p-1 hover:bg-blue-200 rounded text-blue-600 transition"
-                                                title="Vedi piano dettagliato 180 rate"
+                                                title={BFP_CATALOG[code].type === 'coupon' ? "Vedi dettaglio cedole" : "Vedi piano dettagliato 180 rate"}
                                             >
                                                 <List size={16} />
                                             </button>
