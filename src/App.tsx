@@ -279,7 +279,7 @@ export default function App() {
 
         // Usa l'importo specifico del prodotto se presente (modalità portafoglio), altrimenti quello globale
         const investedAmount = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
-        let grossVal = investedAmount;
+        let grossVal: number | null = investedAmount;
 
         // Logica dinamica durata
         let productDuration = prod.duration;
@@ -297,7 +297,7 @@ export default function App() {
           grossVal = investedAmount;
         } else {
            // 1. Calcolo valore alla scadenza (o anno corrente se non scaduto)
-           let baseVal = investedAmount;
+           let baseVal: number | null = investedAmount;
            
            if (prod.type === 'step_up') {
              const rate = prod.yields[Math.min(limitYear, prod.yields.length) - 1] || 0;
