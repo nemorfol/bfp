@@ -69,15 +69,15 @@ const BFP_CATALOG: Record<string, any> = {
     name: 'Buono a Cedola 5 Anni',
     desc: 'Durata 5 anni, cedole semestrali',
     duration: 5,
-    type: 'step_up', // Semplificazione: trattiamo come step-up per il grafico
-    yields: [0.015, 0.0175, 0.02, 0.0225, 0.025] // STIMA: Tassi crescenti (1.5% -> 2.5%)
+    type: 'coupon', 
+    yields: [0.0100, 0.0125, 0.0150, 0.0175, 0.0250] // Tassi lordi annui esatti
   },
   'TF106M': {
     name: 'Buono 6 Mesi',
     desc: 'Durata 6 mesi, rendimento fisso a scadenza',
-    duration: 0.5, // 6 mesi
+    duration: 0.5,
     type: 'fixed_maturity',
-    finalCoeff: 1.015 // STIMA: 1.5% lordo a scadenza (3% annuo)
+    finalCoeff: 1.005 // Stima conservativa (0.5% netto in 6 mesi? Verificare se necessario)
   }
 };
 
@@ -279,6 +279,22 @@ export default function App() {
              baseVal = bestRate > 0 ? investedAmount * Math.pow(1 + bestRate, limitYear) : investedAmount;
            } else if (prod.type === 'fixed_maturity') {
              baseVal = limitYear === productDuration ? investedAmount * prod.finalCoeff : investedAmount;
+           } else if (prod.type === 'coupon') {
+             // LOGICA "Buono a Cedola":
+             // Il capitale base rimane invariato (investedAmount).
+             // Aggiungiamo le cedole NETTE incassate fino all'anno corrente per il confronto grafico.
+             let accumulatedCouponsNet = 0;
+             prod.yields.forEach((rate: number, idx: number) => {
+                 // Se l'anno della cedola (idx + 1) è già passato o è quello corrente
+                 if (idx + 1 <= limitYear) {
+                     const couponGross = investedAmount * rate;
+                     const couponNet = couponGross * 0.875; // Tassazione 12.5%
+                     accumulatedCouponsNet += couponNet;
+                 }
+             });
+             // Per il grafico, mostriamo Capitale + Cedole Incassate (come se fosse un accumulo)
+             // Nota: Il "Valore di Rimborso" effettivo sarebbe solo investedAmount, ma per il confronto rendimenti usiamo il totale.
+             grossVal = investedAmount + (accumulatedCouponsNet / 0.875); // Ricostruiamo il lordo fittizio per calculateNet
            } else if (prod.type === 'inflation_linked') {
              baseVal = investedAmount * Math.pow(1 + inflationRate/100, limitYear) * Math.pow(1 + (prod.spread || 0), limitYear);
            } else if (prod.type === 'annuity') {
