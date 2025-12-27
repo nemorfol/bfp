@@ -308,6 +308,11 @@ export default function App() {
                if (limitYear >= parseInt(stepYear)) bestRate = prod.steps[stepYear as any];
              });
              baseVal = bestRate > 0 ? investedAmount * Math.pow(1 + bestRate, limitYear) : investedAmount;
+           } else if (prod.type === 'fixed_maturity') {
+             // Se siamo alla scadenza o oltre, il valore è quello finale (maturato).
+             // Se prima, è solo il capitale nominale (salvo riscatto anticipato che qui ignoriamo per semplicità o è infruttifero).
+             baseVal = limitYear >= productDuration ? investedAmount * prod.finalCoeff : investedAmount;
+           } else if (prod.type === 'coupon') {
            } else if (prod.type === 'coupon') {
              // LOGICA "Buono a Cedola":
              // Il capitale base rimane invariato. Calcoliamo le cedole semestrali.
