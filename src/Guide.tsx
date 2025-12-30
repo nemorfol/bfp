@@ -133,6 +133,22 @@ export default function Guide() {
                 <strong>Con reinvestimento:</strong> La linea reale rimane piatta dopo la scadenza, preservando il capitale.
             </p>
         </div>
+
+        <SubTitle>Logica Prodotti Previdenziali (BSF/Obiettivo 65)</SubTitle>
+        <p>
+            Per <strong>Soluzione Futuro</strong> e <strong>Obiettivo 65</strong>, il sistema applica una logica specifica:
+        </p>
+        <ul className="list-disc pl-5 mt-2 space-y-1 text-sm">
+            <li><strong>Calcolo a 65 anni:</strong> Il montante viene calcolato tassativamente al compimento del 65° anno di età (basandosi sul campo "Anno di Nascita"), ignorando eventuali scadenze più lunghe riportate nel file Excel (spesso riferite alla fine della rendita a 80 anni).</li>
+            <li><strong>Reattività:</strong> Se modifichi l'Anno di Nascita nel simulatore, il valore di questi buoni si aggiorna istantaneamente.</li>
+            <li><strong>Tabella B:</strong> I tassi vengono applicati coerentemente con l'età di sottoscrizione (Tabella B dei Fogli Informativi).</li>
+        </ul>
+
+        <SubTitle>Caricamento ed Esportazione Excel</SubTitle>
+        <ul className="list-disc pl-5 mt-2 space-y-1 text-sm">
+            <li><strong>Override Manuale:</strong> Se il tuo file Excel contiene una colonna <em>"VALORE LORDO A SCADENZA"</em>, il sistema userà quel valore prioritariamente (salvo per i prodotti previdenziali che vengono ricalcolati).</li>
+            <li><strong>Export Migliorato:</strong> L'esportazione portafoglio ora genera un file <strong>.xlsx</strong> nativo, formattato correttamente e comprensivo dei valori a scadenza calcolati.</li>
+        </ul>
       </Section>
 
     </div>
