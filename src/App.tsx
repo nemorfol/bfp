@@ -1112,9 +1112,25 @@ export default function App() {
                       const validDataPoints = comparisonData.filter(d => d[`${code}_nominal`] !== null);
                       const finalData = validDataPoints[validDataPoints.length - 1] || {};
                       
-                      const nominal = finalData[`${code}_nominal`] || 0;
-                      const real = finalData[`${code}_real`] || 0;
+                      let nominal = finalData[`${code}_nominal`] || 0;
+                      let real = finalData[`${code}_real`] || 0;
                       const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
+
+                      // FIX: Overwrite with Portfolio Data if available to show accurate Final Net Value
+                      const portItemsTable = portfolioData.filter(p => p.serie === code);
+                      if (portItemsTable.length > 0) {
+                          const gross = portItemsTable.reduce((sum, p) => sum + (p.valoreScadenza || 0), 0);
+                          const gain = gross - invested;
+                          const net = gross - (gain > 0 ? gain * 0.125 : 0);
+                          nominal = net;
+                          
+                          // Recalculate Real Value (Net / Inflation^YearsFromNow)
+                          // We use the remaining duration from comparisonData (which is Today -> Maturity)
+                          const yearsRemaining = finalData.year || 0; 
+                          const inflationFactor = Math.pow(1 + inflationRate / 100, yearsRemaining);
+                          real = net / inflationFactor;
+                      }
+
                       const isPositive = real > invested;
                       const color = DISTINCT_COLORS[index % DISTINCT_COLORS.length];
                       
