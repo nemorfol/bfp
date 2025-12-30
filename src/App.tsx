@@ -578,8 +578,9 @@ export default function App() {
                 const item = BFP_CATALOG[serieCode];
                 const overrideValue = keyValoreOverride ? parseCurrency(row[keyValoreOverride]) : 0;
                 const isAnnuity = item && item.type === 'annuity';
+                const isInflation = item && item.type === 'inflation_linked';
                 
-                if (overrideValue > 0 && !isAnnuity) {
+                if (overrideValue > 0 && !isAnnuity && !isInflation) {
                     valoreScadenza = overrideValue;
                 } else if (item) {
                     let finalCoeff = 1;
@@ -611,6 +612,9 @@ export default function App() {
                                      const spread = item.spread || 0;
                                      finalCoeff = Math.pow(1 + effectiveInflation + spread, durYears);
                                  }
+                             } else if (overrideValue > 0) {
+                                 // Fallback: Use Excel value if dates are missing/invalid
+                                 finalCoeff = overrideValue / nominale;
                              }
                         } else if (item.type === 'annuity') {
                         const now = new Date();
