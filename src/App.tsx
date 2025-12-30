@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { FileText, TrendingUp, Download, Settings, Calculator, PieChart, AlertCircle, BookOpen, List, Upload } from 'lucide-react';
 import Guide from './Guide';
 import AnnuityModal from './AnnuityModal';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 /**
  * DATI STATICI (Fallback) + Logica Simulazione
@@ -15,6 +17,41 @@ const BFP_CATALOG: Record<string, any> = {
     duration: 20,
     type: 'step_up',
     yields: [0.05, 0.05, 0.05, 0.05, 0.25, 0.50, 0.75, 1.00, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00].map(x => x / 100) 
+  },
+  'TF116A': {
+    name: 'Buono 4x4',
+    desc: 'Durata 16 anni, scatti ogni 4 anni',
+    duration: 16,
+    type: 'step_up_fixed',
+    steps: { 4: 0.01, 8: 0.015, 12: 0.0175, 16: 0.03 }
+  },
+  'TF104A': {
+    name: 'Buono 4 anni risparmiosemplice',
+    desc: 'Durata 4 anni, tasso fisso a scadenza',
+    duration: 4,
+    type: 'fixed_maturity',
+    finalCoeff: 1.06136   // 1.50% annual gross compounded: 1.015^4 ≈ 1.06136
+  },
+  'TF704A': {
+    name: 'Buono Rinnova Prima',
+    desc: 'Durata 4 anni, riservato rinnovi',
+    duration: 4,
+    type: 'fixed_maturity',
+    finalCoeff: 1.07186   // 1.75% annual gross compounded: 1.0175^4 ≈ 1.07186
+  },
+  'TF904A': {
+    name: 'Buono 100',
+    desc: 'Durata 4 anni, dedicato nuova liquidità',
+    duration: 4,
+    type: 'fixed_maturity',
+    finalCoeff: 1.1255    // 3.00% annual gross compounded: 1.03^4 ≈ 1.12550
+  },
+  'EL107A': {
+    name: 'Buono Risparmio Sostenibile',
+    desc: 'Durata 7 anni, premio ESG eventuale',
+    duration: 7,
+    type: 'fixed_maturity',
+    finalCoeff: 1.1098    // 1.50% annual gross compounded: 1.015^7 ≈ 1.10984
   },
   'TF212A': {
     name: 'Buono 3x4',
@@ -46,17 +83,19 @@ const BFP_CATALOG: Record<string, any> = {
   },
   'SF165A': {
     name: 'Soluzione Futuro (BSFed)',
-    desc: 'Rendita 65-80 anni (Min. 3.5% o Inflazione)',
+    desc: 'Rendita 65-80 anni (Min. 1.5% stimato)',
     duration: -1, 
     type: 'annuity',
-    fixed_rate: 0.035
+    fixed_rate: 0.015,
+    aliases: ['BSF', 'SOLUZIONE FUTURO', 'SF165']
   },
   'BO165A': {
     name: 'Obiettivo 65 (BFPO65)',
     desc: 'Rendita 65-80 anni (Min. 0.5% o Inflazione)',
     duration: -1, 
     type: 'annuity',
-    fixed_rate: 0.005 // Tasso minimo molto più basso per le vecchie emissioni
+    fixed_rate: 0.005,
+    aliases: ['BFPO65', 'OBIETTIVO 65', 'BO165']
   },
   'IL110A': {
     name: 'Indicizzato Inflazione',
@@ -437,133 +476,223 @@ export default function App() {
     }
   };
 
-  const processPortfolioData = (data: any[]) => {
-    if (!data || data.length === 0) return;
+    // State for Raw Data to allow recalculation
+    const [rawImportData, setRawImportData] = useState<any[]>([]);
 
-    // Mapping dinamico delle colonne
-    const keys = Object.keys(data[0]);
-    const findKey = (term: string) => keys.find(k => k.toLowerCase().includes(term.toLowerCase()));
+    useEffect(() => {
+        if (rawImportData.length === 0) return;
+        recalculatePortfolio(rawImportData);
+    }, [rawImportData, birthYear]);
 
-    const keySerie = findKey('serie') || findKey('tipologia');
-    const keyNominale = findKey('nominale') || findKey('capitale') || findKey('importo');
-    const keyScadenza = findKey('scadenza');
-    const keyValore = findKey('rimborso') || findKey('valore') || findKey('liquidazione');
-
-    let totalNominale = 0;
-    let totalLiquidation = 0;
-    const parsed = [];
-
-    // Helper per pulire numeri formattati (es. "€ 1.000,00" -> 1000.00)
-    const parseCurrency = (val: any) => {
-        if (typeof val === 'number') return val;
-        if (!val) return 0;
-        const str = String(val);
-        // Rimuove tutto tranne numeri, virgole e meno. Rimuove i punti (migliaia).
-        // Presuppone formato italiano (1.000,00)
-        const clean = str.replace(/[^\d,-]/g, '').replace(',', '.');
-        return parseFloat(clean);
+    const processPortfolioData = (data: any[]) => {
+        setRawImportData(data);
     };
 
-    for (let i = 0; i < data.length; i++) {
-        const row = data[i];
-        const nominale = parseCurrency(row[keyNominale!]);
-        const valore = parseCurrency(row[keyValore!]);
+    const recalculatePortfolio = (data: any[]) => {
+        // ... (existing logic moving here)
+        // ...
+        // Logic largely identical to current processPortfolioData but using current `birthYear` state
+        // Since `recalculatePortfolio` is called by useEffect, it has access to fresh `birthYear`.
         
-        if (nominale > 0) {
-            const serieRaw = row[keySerie!] || "Sconosciuto";
-            let serieCode = "OTHER";
-            Object.keys(BFP_CATALOG).forEach(k => {
-                const catalogItem = BFP_CATALOG[k];
-                const rawUpper = String(serieRaw).toUpperCase();
-                // Match sia per CODICE (es. TF120A) che per NOME (es. Buono Rinnova)
-                if (rawUpper.includes(k) || rawUpper.includes(catalogItem.name.toUpperCase())) {
-                    serieCode = k;
+        // COPY OF LOGIC FROM EXISTING processPortfolioData:
+        if (!data || data.length === 0) return;
+
+        const keys = Object.keys(data[0]);
+        const findKey = (term: string) => keys.find(k => k.toLowerCase().includes(term.toLowerCase()));
+
+        const keySerie = findKey('serie') || findKey('tipologia');
+        const keyNominale = findKey('nominale') || findKey('capitale') || findKey('importo');
+        const keyScadenza = findKey('scadenza');
+        const keyValore = findKey('rimborso') || findKey('valore') || findKey('liquidazione');
+        const keyValoreOverride = findKey('valore lordo a scadenza') || findKey('lordo a scadenza');
+        const keySottoscrizione = findKey('data sottoscrizione') || findKey('sottoscrizione') || findKey('data operazione');
+        const keyProdotto = findKey('prodotto') || findKey('descrizione') || findKey('denominazione');
+
+        let totalNominale = 0;
+        let totalLiquidation = 0;
+        const parsed: any[] = [];
+        
+        // ... (Keep helper functions parseDate/parseCurrency inside or move outside)
+        // Better move helpers outside or duplicate them for now to minimize diff risk.
+        // For safety I will keep definitions inside.
+        
+        const parseDate = (val: any): Date | null => {
+            if (!val) return null;
+            if (val instanceof Date) return val;
+            if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000);
+            const str = String(val).trim();
+            const dateMatch = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+            if (dateMatch) return new Date(parseInt(dateMatch[3]), parseInt(dateMatch[2]) - 1, parseInt(dateMatch[1]));
+            if (str.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) return new Date(str);
+            return null;
+        };
+
+        const parseCurrency = (val: any) => {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            const str = String(val);
+            const clean = str.replace(/[^\d,-]/g, '').replace(',', '.');
+            return parseFloat(clean);
+        };
+
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            const nominale = parseCurrency(row[keyNominale!]);
+            const valore = parseCurrency(row[keyValore!]);
+            
+            if (nominale > 0) {
+                 const serieRaw = row[keySerie!] || "Sconosciuto";
+                const prodottoRaw = keyProdotto ? row[keyProdotto] : "";
+                
+                let serieCode = "OTHER";
+                Object.keys(BFP_CATALOG).forEach(k => {
+                    const catalogItem = BFP_CATALOG[k];
+                    const rawUpper = String(serieRaw).toUpperCase();
+                    const prodUpper = String(prodottoRaw).toUpperCase();
+                    const aliases = catalogItem.aliases || [];
+                    const matchesAlias = aliases.some((alias: string) => rawUpper.includes(alias) || (prodottoRaw && prodUpper.includes(alias)));
+                    if (
+                        rawUpper.includes(k) || k.includes(rawUpper) ||
+                        rawUpper.includes(catalogItem.name.toUpperCase()) || catalogItem.name.toUpperCase().includes(rawUpper) ||
+                        (prodottoRaw && (prodUpper.includes(catalogItem.name.toUpperCase()) || catalogItem.name.toUpperCase().includes(prodUpper))) ||
+                        matchesAlias
+                    ) { serieCode = k; }
+                });
+
+                let valoreScadenza = 0;
+                const item = BFP_CATALOG[serieCode];
+                const overrideValue = keyValoreOverride ? parseCurrency(row[keyValoreOverride]) : 0;
+                const isAnnuity = item && item.type === 'annuity';
+                
+                if (overrideValue > 0 && !isAnnuity) {
+                    valoreScadenza = overrideValue;
+                } else if (item) {
+                    let finalCoeff = 1;
+                    if (item.finalCoeff) { finalCoeff = item.finalCoeff; }
+                    else if (item.type === 'step_up_fixed' && item.steps) {
+                        const rate = item.steps[item.duration];
+                        if (rate) finalCoeff = Math.pow(1 + rate, item.duration);
+                    } else if (item.type === 'step_up' && item.yields) {
+                        const rate = item.yields[item.duration - 1];
+                        if (rate) finalCoeff = Math.pow(1 + rate, item.duration);
+                    } else if (item.type === 'annuity') {
+                        const now = new Date();
+                        let maturityDate = now;
+                        let subDate = now;
+                        const parsedMaturity = parseDate(row[keyScadenza!]);
+                        const parsedSub = parseDate(row[keySottoscrizione!]); 
+                        
+                        // FIX: Force Maturity to Age 65 for Annuities (SF165/BO165)
+                        // The Excel "Scadenza" might be Age 80 (end of annuity payments), causing extra compounding.
+                        // We must stop compounding at Age 65.
+                        maturityDate = new Date(birthYear + 65, 11, 31); 
+                        
+                        if (parsedSub) subDate = parsedSub;
+                        
+                        const msDiff = maturityDate.getTime() - now.getTime();
+                        const yearsRemaining = msDiff / (1000 * 60 * 60 * 24 * 365.25);
+                        
+                        // *** CRITICAL CHANGE: Use CURRENT birthYear state ***
+                        const subYear = subDate.getFullYear();
+                        const ageAtSub = subYear - birthYear; 
+
+                        let annualRate = 0.01;
+                        if (serieCode === 'SF165A') {
+                            if (ageAtSub < 43) annualRate = 0.035;
+                            else if (ageAtSub < 49) annualRate = 0.0325;
+                            else annualRate = 0.03; 
+                        } else if (serieCode === 'BO165A') {
+                            annualRate = 0.01; 
+                        } else {
+                            annualRate = item.fixed_rate || 0.01;
+                        }
+                        
+                        if (yearsRemaining > 0 && yearsRemaining < 60) {
+                             finalCoeff = Math.pow(1 + annualRate, yearsRemaining);
+                        }
+                    }
+                    valoreScadenza = nominale * finalCoeff;
                 }
-            });
 
-            parsed.push({
-                id: i,
-                serie: serieCode,
-                serieRaw: serieRaw,
-                scadenza: row[keyScadenza!],
-                nominale: nominale || 0,
-                valoreAttuale: valore || 0,
-                prodotto: BFP_CATALOG[serieCode] ? BFP_CATALOG[serieCode].name : serieRaw
-            });
-
-            totalNominale += (nominale || 0);
-            totalLiquidation += (valore || 0);
-        }
-    }
-
-    setPortfolioData(parsed);
-    setPortfolioSummary({
-        totalNominale,
-        totalLiquidation,
-        count: parsed.length
-    });
-
-    // --- AUTO-CONFIGURAZIONE SIMULATORE ---
-    
-    // 1. Calcola importi per singolo prodotto e totali
-    const amountsByProduct: Record<string, number> = {};
-    const uniqueSeries = new Set<string>();
-    let maxYear = new Date().getFullYear();
-    let estimatedBirthYear: number | null = null;
-
-    parsed.forEach(p => {
-        // Aggrega importi per codice prodotto
-        if (BFP_CATALOG[p.serie]) {
-            if (!amountsByProduct[p.serie]) amountsByProduct[p.serie] = 0;
-            amountsByProduct[p.serie] += p.nominale;
-            uniqueSeries.add(p.serie);
-        }
-
-        // Estrai l'anno dalla stringa di scadenza
-        const yearMatch = String(p.scadenza).match(/\d{4}/);
-        if (yearMatch) {
-            const y = parseInt(yearMatch[0]);
-            if (y > maxYear) maxYear = y;
-
-            if ((p.serie.includes('BO165') || p.serie.includes('SF165')) && !estimatedBirthYear) {
-                estimatedBirthYear = y - 65;
+                parsed.push({
+                    id: i,
+                    serie: serieCode,
+                    serieRaw: serieRaw,
+                    scadenza: row[keyScadenza!],
+                    nominale: nominale || 0,
+                    valoreAttuale: valore || 0,
+                    valoreScadenza: valoreScadenza,
+                    prodotto: BFP_CATALOG[serieCode] ? BFP_CATALOG[serieCode].name : (row[keyProdotto!] || serieRaw)
+                });
+                totalNominale += (nominale || 0);
+                totalLiquidation += (valore || 0);
             }
         }
-    });
+        setPortfolioData(parsed);
+        setPortfolioSummary({ totalNominale, totalLiquidation, count: parsed.length });
+        
+        // Auto-configure only on first load? Or always?
+        // Let's keep existing logic but maybe prevent re-switch if tab already active?
+        // We can just execute the logic.
+        
+        const amountsByProduct: Record<string, number> = {};
+        const uniqueSeries = new Set<string>();
+        let maxYear = new Date().getFullYear();
+        let estimatedBirthYear: number | null = null;
+        parsed.forEach(p => {
+             if (BFP_CATALOG[p.serie]) {
+                if (!amountsByProduct[p.serie]) amountsByProduct[p.serie] = 0;
+                amountsByProduct[p.serie] += p.nominale;
+                uniqueSeries.add(p.serie);
+            }
+            const yearMatch = String(p.scadenza).match(/\d{4}/);
+            if (yearMatch) {
+                const y = parseInt(yearMatch[0]);
+                if (y > maxYear) maxYear = y;
+                if ((p.serie.includes('BO165') || p.serie.includes('SF165')) && !estimatedBirthYear) {
+                    estimatedBirthYear = y - 65;
+                }
+            }
+        });
+        setProductAmounts(amountsByProduct);
+        setSimulationAmount(totalNominale);
+        if (uniqueSeries.size > 0) setSelectedProducts(Array.from(uniqueSeries));
+        const yearsFromNow = maxYear - new Date().getFullYear();
+        setCustomDuration(yearsFromNow > 0 ? yearsFromNow + 1 : 20);
 
-    // Imposta gli importi specifici (questo attiverà la "Modalità Portafoglio" nel simulatore)
-    setProductAmounts(amountsByProduct);
-    
-    // Imposta comunque il totale globale come fallback visivo
-    setSimulationAmount(totalNominale);
-
-    // 2. Seleziona i prodotti trovati
-    if (uniqueSeries.size > 0) {
-        setSelectedProducts(Array.from(uniqueSeries));
-    }
-
-    // 3. Imposta orizzonte temporale e anno nascita
-    const yearsFromNow = maxYear - new Date().getFullYear();
-    setCustomDuration(yearsFromNow > 0 ? yearsFromNow + 1 : 20);
-
-    if (estimatedBirthYear) {
-        setBirthYear(estimatedBirthYear);
-    }
-
-    setActiveTab('portfolio');
-  };
+        // Only auto-set birth year if we are processing the FIRST time (or if still default)
+        if (estimatedBirthYear && birthYear === 1980) {
+             setBirthYear(estimatedBirthYear);
+        }
+        
+        if (parsed.length > 0) setActiveTab('portfolio');
+    };
 
   const exportPortfolio = () => {
     if (portfolioData.length === 0) return;
-    const header = ["ID", "Serie", "Prodotto", "Nominale", "Valore Attuale", "Scadenza"];
-    const rows = portfolioData.map(p => [p.id, p.serie, p.prodotto, p.nominale, p.valoreAttuale, p.scadenza]);
-    const csvContent = "data:text/csv;charset=utf-8," + [header.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "analisi_portafoglio_bfp.csv");
-    document.body.appendChild(link);
-    link.click();
+    
+    // Preparazione dati per Excel
+    const dataForExcel = portfolioData.map(p => ({
+        "ID": p.id,
+        "Serie": p.serie,
+        "Prodotto": p.prodotto,
+        "Data Sottoscrizione": p.scadenza, // Nota: nell'oggetto è salvato in "scadenza" ma potrebbe essere la data operazione
+        "Nominale (€)": p.nominale,
+        "Valore Attuale (€)": p.valoreAttuale,
+        "Valore Scadenza (€)": p.valoreScadenza
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Portafoglio");
+    
+    // Adjust column widths
+    const wscols = [
+        {wch: 5}, {wch: 10}, {wch: 30}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 15}
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, "analisi_portafoglio_bfp.xlsx");
   };
 
   const exportSimulation = () => {
@@ -671,6 +800,72 @@ export default function App() {
 
     // 5. Download
     XLSX.writeFile(wb, `simulazione_bfp_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const exportPDF = () => {
+    if (portfolioData.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(30, 64, 175); // Blue 800
+    doc.text("BFP Analyzer Pro - Report Portafoglio", 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generato il: ${new Date().toLocaleDateString('it-IT')}`, 14, 28);
+
+    // Summary Box
+    doc.setDrawColor(200);
+    doc.setFillColor(245, 247, 255); // Light Blue bg
+    doc.rect(14, 35, 180, 25, 'FD');
+    
+    doc.setFontSize(10);
+    doc.setTextColor(50);
+    doc.text("Totale Nominale", 20, 42);
+    doc.text("Valore Attuale", 80, 42);
+    doc.text("N° Buoni", 140, 42);
+
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.text(`€ ${new Intl.NumberFormat('it-IT').format(portfolioSummary?.totalNominale || 0)}`, 20, 52);
+    doc.text(`€ ${new Intl.NumberFormat('it-IT').format(portfolioSummary?.totalLiquidation || 0)}`, 80, 52);
+    doc.text(String(portfolioSummary?.count || 0), 140, 52);
+
+    // Table
+    const tableData = portfolioData.map(p => [
+        p.serie,
+        p.prodotto,
+        `€ ${new Intl.NumberFormat('it-IT').format(p.nominale)}`,
+        `€ ${new Intl.NumberFormat('it-IT').format(p.valoreAttuale)}`,
+        `€ ${p.valoreScadenza ? new Intl.NumberFormat('it-IT').format(p.valoreScadenza) : '-'}`,
+        p.scadenza
+    ]);
+
+    autoTable(doc, {
+        startY: 70,
+        head: [['Serie', 'Prodotto', 'Nominale', 'Valore Attuale', 'Valore Scadenza', 'Scadenza']],
+        body: tableData,
+        headStyles: { fillColor: [30, 64, 175] },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        styles: { fontSize: 9 },
+        columnStyles: {
+            2: { halign: 'right' },
+            3: { halign: 'right', fontStyle: 'bold' },
+            4: { halign: 'right', fontStyle: 'bold' },
+            5: { halign: 'center' }
+        }
+    });
+
+    // Footer
+    const finalY = (doc as any).lastAutoTable.finalY || 150;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text("Analisi generata da BFP Analyzer Pro. I valori futuri sono stime.", 14, finalY + 10);
+
+    doc.save(`report_bfp_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   return (
@@ -1003,9 +1198,14 @@ export default function App() {
                                       <input type='file' accept='.xlsx, .xls' onChange={handleFileUpload} disabled={isUploading} className="hidden" />
                                     </label>
                                     {portfolioData.length > 0 && (
-                                      <button onClick={exportPortfolio} className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
-                                        <Download size={18} /> Esporta
-                                      </button>
+                                      <>
+                                        <button onClick={exportPortfolio} className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                                          <Download size={18} /> Excel
+                                        </button>
+                                        <button onClick={exportPDF} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                                          <FileText size={18} /> PDF
+                                        </button>
+                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -1039,6 +1239,7 @@ export default function App() {
                                            <th className="p-3">Descrizione</th>
                                            <th className="p-3 text-right">Nominale</th>
                                            <th className="p-3 text-right">Val. Attuale</th>
+                                           <th className="p-3 text-right">Valore Scadenza</th>
                                            <th className="p-3 rounded-tr-lg">Scadenza</th>
                                          </tr>
                                        </thead>
@@ -1049,6 +1250,9 @@ export default function App() {
                                              <td className="p-3">{row.prodotto}</td>
                                              <td className="p-3 text-right font-medium">€ {new Intl.NumberFormat('it-IT').format(row.nominale)}</td>
                                              <td className="p-3 text-right font-bold text-green-700">€ {new Intl.NumberFormat('it-IT').format(row.valoreAttuale)}</td>
+                                             <td className="p-3 text-right font-bold text-blue-600">
+                                                {row.valoreScadenza ? `€ ${new Intl.NumberFormat('it-IT').format(row.valoreScadenza)}` : '-'}
+                                             </td>
                                              <td className="p-3">{row.scadenza}</td>
                                            </tr>
                                          ))}
