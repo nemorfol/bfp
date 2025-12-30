@@ -102,7 +102,8 @@ const BFP_CATALOG: Record<string, any> = {
     desc: '10 anni, protegge capitale + spread',
     duration: 10,
     type: 'inflation_linked',
-    spread: 0.006
+    spread: 0.006,
+    aliases: ['INDICIZZATO', 'INFLAZIONE', 'J27', 'J19', 'J01', 'IL110']
   },
   'TC005A': {
     name: 'Buono a Cedola 5 Anni',
