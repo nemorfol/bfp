@@ -579,7 +579,6 @@ export default function App() {
                         const now = new Date();
                         let maturityDate = now;
                         let subDate = now;
-                        const parsedMaturity = parseDate(row[keyScadenza!]);
                         const parsedSub = parseDate(row[keySottoscrizione!]); 
                         
                         // FIX: Force Maturity to Age 65 for Annuities (SF165/BO165)
