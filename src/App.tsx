@@ -473,7 +473,12 @@ export default function App() {
             const serieRaw = row[keySerie!] || "Sconosciuto";
             let serieCode = "OTHER";
             Object.keys(BFP_CATALOG).forEach(k => {
-                if (String(serieRaw).includes(k)) serieCode = k;
+                const catalogItem = BFP_CATALOG[k];
+                const rawUpper = String(serieRaw).toUpperCase();
+                // Match sia per CODICE (es. TF120A) che per NOME (es. Buono Rinnova)
+                if (rawUpper.includes(k) || rawUpper.includes(catalogItem.name.toUpperCase())) {
+                    serieCode = k;
+                }
             });
 
             parsed.push({
