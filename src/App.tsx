@@ -462,6 +462,7 @@ export default function App() {
       if (!response.ok) throw new Error('File di default non trovato');
       const data = await response.json();
       processPortfolioData(data);
+      setActiveTab('portfolio'); // Switch tab only on explicit load
     } catch (err: any) {
       setUploadError(err.message);
     } finally {
@@ -482,6 +483,7 @@ export default function App() {
       if (!response.ok) throw new Error('Upload fallito');
       const result = await response.json();
       processPortfolioData(result.data);
+      setActiveTab('portfolio'); // Switch tab only on explicit load
     } catch (err: any) {
       setUploadError(err.message);
     } finally {
@@ -587,8 +589,29 @@ export default function App() {
                         if (rate) finalCoeff = Math.pow(1 + rate, item.duration);
                     } else if (item.type === 'step_up' && item.yields) {
                         const rate = item.yields[item.duration - 1];
-                        if (rate) finalCoeff = Math.pow(1 + rate, item.duration);
-                    } else if (item.type === 'annuity') {
+                        } else if (item.type === 'inflation_linked') {
+                             // FIX: Inflation Linked Logic
+                             const infRate = parseFloat(String(inflationRate));
+                             const effectiveInflation = isNaN(infRate) ? 0 : infRate / 100;
+                             
+                             // Duration from Subscription to Maturity (or Today?)
+                             // Usually Inflation Linked bonds have a fixed duration (e.g. 10 years).
+                             // If "Scadenza" is in Excel, we use that.
+                             // Here we just calc multiplier (1+Inf)^Years
+                             
+                             // Calculate duration similar to Annuity
+                             const parsedSub = parseDate(row[keySottoscrizione!]);
+                             const parsedMat = parseDate(row[keyScadenza!]);
+                             
+                             if (parsedSub && parsedMat) {
+                                 const diff = parsedMat.getTime() - parsedSub.getTime();
+                                 const durYears = diff / (1000 * 60 * 60 * 24 * 365.25);
+                                 if (durYears > 0) {
+                                     const spread = item.spread || 0;
+                                     finalCoeff = Math.pow(1 + effectiveInflation + spread, durYears);
+                                 }
+                             }
+                        } else if (item.type === 'annuity') {
                         const now = new Date();
                         let maturityDate = now;
                         let subDate = now;
@@ -687,7 +710,11 @@ export default function App() {
              setBirthYear(estimatedBirthYear);
         }
         
-        if (parsed.length > 0) setActiveTab('portfolio');
+        if (parsed.length > 0 && activeTab === 'comparator' && rawImportData.length === 0) {
+            // Auto-switch only on very first processing (if we want)
+            // But better let the upload handlers do it.
+            // setActiveTab('portfolio'); 
+        }
     };
 
   const exportPortfolio = () => {
