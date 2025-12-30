@@ -1124,7 +1124,32 @@ export default function App() {
                       const userAgeAtEnd = (currentYear - birthYear) + finalData.year; 
                       const isAnnuity = BFP_CATALOG[code].type === 'annuity';
                       const canReceiveAnnuity = isAnnuity && userAgeAtEnd >= 65;
-                      const monthlyRate = canReceiveAnnuity ? nominal / 180 : 0;
+                      let monthlyRate = 0;
+                      if (canReceiveAnnuity) {
+                          // FIX: Use Portfolio Data for accurate Capital at 65 (calculated from subscription)
+                          // instead of the Simulator's "New Investment" value.
+                          const portItems = portfolioData.filter(p => p.serie === code);
+                          let netAt65 = nominal; // Fallback to Simulator Net
+                          
+                          if (portItems.length > 0) {
+                              const grossAt65 = portItems.reduce((sum, p) => sum + (p.valoreScadenza || 0), 0);
+                              const gain = grossAt65 - invested;
+                              netAt65 = grossAt65 - (gain > 0 ? gain * 0.125 : 0);
+                          }
+                          
+                          const annualRateRec = code.includes('SF165') ? 0.035 : 0.0235;
+                          const rateM = Math.pow(1 + annualRateRec, 1/12) - 1;
+                          const n = 180;
+                          
+                          // Rata Francese Costante (Lorda)
+                          const rataLorda = (netAt65 * rateM) / (1 - Math.pow(1 + rateM, -n));
+                          
+                          // Calcolo Prima Rata Netta (per stima realistica)
+                          const qI = netAt65 * rateM;
+                          const rit = qI * 0.125;
+                          const bollo = (netAt65 * 0.002) / 12;
+                          monthlyRate = rataLorda - rit - bollo;
+                      }
 
                       return (
                         <tr key={code} className="border-b hover:bg-slate-50 last:border-0">
