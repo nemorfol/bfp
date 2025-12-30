@@ -589,6 +589,7 @@ export default function App() {
                         if (rate) finalCoeff = Math.pow(1 + rate, item.duration);
                     } else if (item.type === 'step_up' && item.yields) {
                         const rate = item.yields[item.duration - 1];
+                        if (rate) finalCoeff = Math.pow(1 + rate, item.duration);
                         } else if (item.type === 'inflation_linked') {
                              // FIX: Inflation Linked Logic
                              const infRate = parseFloat(String(inflationRate));
