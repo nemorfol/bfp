@@ -495,7 +495,7 @@ export default function App() {
     useEffect(() => {
         if (rawImportData.length === 0) return;
         recalculatePortfolio(rawImportData);
-    }, [rawImportData, birthYear]);
+    }, [rawImportData, birthYear, inflationRate]);
 
     const processPortfolioData = (data: any[]) => {
         setRawImportData(data);
@@ -622,7 +622,15 @@ export default function App() {
                         }
                         
                         if (totalYears > 0 && totalYears < 60) {
-                             finalCoeff = Math.pow(1 + annualRate, totalYears);
+                             const valFixed = Math.pow(1 + annualRate, totalYears);
+                             
+                             // Calculate Inflation Linked Value
+                             const infRate = parseFloat(String(inflationRate));
+                             const effectiveInflation = isNaN(infRate) ? 0 : infRate / 100;
+                             const valInflation = Math.pow(1 + effectiveInflation, totalYears);
+                             
+                             // Take the maximum (Capital Protection or Inflation)
+                             finalCoeff = Math.max(valFixed, valInflation);
                         }
                     }
                     valoreScadenza = nominale * finalCoeff;
