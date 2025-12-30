@@ -272,26 +272,39 @@ export default function App() {
       }
 
       // ... logica esistente per annuity (BSFed/BFPO65) ...
+      // Se siamo già oltre i 65 anni o ci arriviamo nel grafico...
       const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
       
-      // Se siamo già oltre i 65 anni o ci arriviamo nel grafico...
-      // Recuperiamo la logica di calcolo usata nel grafico
-      // Per semplicità, ricalcoliamo il montante netto a 65 anni qui:
-      
-      // Montante Lordo a 65 anni
-      let grossAt65 = invested;
-      const limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
-      
-      const infRate = parseFloat(String(inflationRate));
-      const effectiveInflationRate = isNaN(infRate) ? 0 : infRate / 100;
-      const effectiveFixedRate = prod.fixed_rate || 0;
+      let grossAt65 = 0;
+      let totalInvested = 0;
 
-      const valFixed = invested * Math.pow(1 + effectiveFixedRate, limitYear);
-      const valInflation = invested * Math.pow(1 + effectiveInflationRate, limitYear);
-      grossAt65 = Math.max(valFixed, valInflation);
+      // FIX: Check if we have Portfolio Data for this product to use accurate values
+      // This ensures the Modal matches the Table (calculated from Subscription Date)
+      // instead of simulating a new investment from Today.
+      const portfolioItems = portfolioData.filter(p => p.serie === code);
+      
+      if (portfolioItems.length > 0) {
+          portfolioItems.forEach(p => {
+              grossAt65 += p.valoreScadenza || 0;
+              totalInvested += p.nominale;
+          });
+      } else {
+          // Fallback: Simulator mode (New Investment from Today)
+          totalInvested = invested;
+          
+          let limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
+          
+          const infRate = parseFloat(String(inflationRate));
+          const effectiveInflationRate = isNaN(infRate) ? 0 : infRate / 100;
+          const effectiveFixedRate = prod.fixed_rate || 0;
+
+          const valFixed = totalInvested * Math.pow(1 + effectiveFixedRate, limitYear);
+          const valInflation = totalInvested * Math.pow(1 + effectiveInflationRate, limitYear);
+          grossAt65 = Math.max(valFixed, valInflation);
+      }
 
       // Netto (Tassazione 12.5% sul gain)
-      const gain = grossAt65 - invested;
+      const gain = grossAt65 - totalInvested;
       const tax = gain > 0 ? gain * 0.125 : 0;
       const netAt65 = grossAt65 - tax;
 
