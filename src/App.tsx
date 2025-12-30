@@ -673,7 +673,7 @@ export default function App() {
     // Preparazione dati per Excel
     const dataForExcel = portfolioData.map(p => ({
         "ID": p.id,
-        "Serie": p.serie,
+        "Serie": p.serieRaw || p.serie,
         "Prodotto": p.prodotto,
         "Data Sottoscrizione": p.scadenza, // Nota: nell'oggetto è salvato in "scadenza" ma potrebbe essere la data operazione
         "Nominale (€)": p.nominale,
@@ -835,7 +835,7 @@ export default function App() {
 
     // Table
     const tableData = portfolioData.map(p => [
-        p.serie,
+        p.serieRaw || p.serie,
         p.prodotto,
         `€ ${new Intl.NumberFormat('it-IT').format(p.nominale)}`,
         `€ ${new Intl.NumberFormat('it-IT').format(p.valoreAttuale)}`,
@@ -1245,7 +1245,7 @@ export default function App() {
                                        <tbody>
                                          {portfolioData.map((row) => (
                                            <tr key={row.id} className="border-b hover:bg-slate-50">
-                                             <td className="p-3 font-mono text-blue-600">{row.serie}</td>
+                                             <td className="p-3 font-mono text-blue-600">{row.serieRaw || row.serie}</td>
                                              <td className="p-3">{row.prodotto}</td>
                                              <td className="p-3 text-right font-medium">€ {new Intl.NumberFormat('it-IT').format(row.nominale)}</td>
                                              <td className="p-3 text-right font-bold text-green-700">€ {new Intl.NumberFormat('it-IT').format(row.valoreAttuale)}</td>
