@@ -588,8 +588,10 @@ export default function App() {
                         
                         if (parsedSub) subDate = parsedSub;
                         
-                        const msDiff = maturityDate.getTime() - now.getTime();
-                        const yearsRemaining = msDiff / (1000 * 60 * 60 * 24 * 365.25);
+                        // FIX: Duration must be from Subscription Date to Maturity (Age 65)
+                        // Previously this was (Maturity - Now), which ignored past capitalization on the Nominal.
+                        const msDiff = maturityDate.getTime() - subDate.getTime();
+                        const totalYears = msDiff / (1000 * 60 * 60 * 24 * 365.25);
                         
                         // *** CRITICAL CHANGE: Use CURRENT birthYear state ***
                         const subYear = subDate.getFullYear();
@@ -606,8 +608,8 @@ export default function App() {
                             annualRate = item.fixed_rate || 0.01;
                         }
                         
-                        if (yearsRemaining > 0 && yearsRemaining < 60) {
-                             finalCoeff = Math.pow(1 + annualRate, yearsRemaining);
+                        if (totalYears > 0 && totalYears < 60) {
+                             finalCoeff = Math.pow(1 + annualRate, totalYears);
                         }
                     }
                     valoreScadenza = nominale * finalCoeff;
