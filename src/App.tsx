@@ -540,6 +540,21 @@ export default function App() {
             const dateMatch = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
             if (dateMatch) return new Date(parseInt(dateMatch[3]), parseInt(dateMatch[2]) - 1, parseInt(dateMatch[1]));
             if (str.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) return new Date(str);
+            
+            // Handle Italian text format: "30 mar 2061" or "30-mar-2061"
+            const itMonthMatch = str.match(/^(\d{1,2})[\s\.\/-]+([a-zA-Z]{3,})[\s\.\/-]+(\d{4})$/);
+            if (itMonthMatch) {
+                const day = parseInt(itMonthMatch[1]);
+                const monthStr = itMonthMatch[2].toLowerCase().substring(0, 3);
+                const year = parseInt(itMonthMatch[3]);
+                const months: Record<string, number> = {
+                    'gen': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'mag': 4, 'giu': 5,
+                    'lug': 6, 'ago': 7, 'set': 8, 'ott': 9, 'nov': 10, 'dic': 11
+                };
+                if (months[monthStr] !== undefined) {
+                    return new Date(year, months[monthStr], day);
+                }
+            }
             return null;
         };
 
