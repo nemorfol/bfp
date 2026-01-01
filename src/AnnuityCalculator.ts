@@ -94,6 +94,8 @@ export const calculateAggregatedSchedule = (
               const coeffs = getCoefficients(itemAge, code);
               let itemTargetInstallment = undefined;
               let itemSimulatedInstallment = 0;
+              let itemSimulatedCapital = itemNetAt65; // Default to base capital (inflated usually)
+              let baseCapitalToUse = itemNetAt65;     // Default to base capital (inflated usually)
               
               if (coeffs) {
                   // 1. Minimum (or Fixed) Installment
@@ -101,6 +103,22 @@ export const calculateAggregatedSchedule = (
                   const minInst = Math.round(rawMinInst * 100) / 100;
                   
                   itemTargetInstallment = minInst; 
+                  
+                  // FIX for Base Schedule: Always use Minimum Guaranteed Capital (not Inflated)
+                  // if we are in BO165A/SF165A.
+                  
+                  // Calculate minCapitalAt65 assuming French Amortization reverse
+                  const r_min = coeffs.d_rate_gross / 12;
+                  const n_min = 180;
+                  const factor_min = r_min / (1 - Math.pow(1 + r_min, -n_min));
+                  
+                  // This is the Capital required to generate minInst at fixed rate
+                  const minCapitalAt65 = minInst / factor_min;
+                  
+                  if (code.includes('BO165A') || code.includes('SF165A')) {
+                      // Override with Minimum Capital for Base Schedule
+                      baseCapitalToUse = minCapitalAt65;
+                  }
                   
                   // --- CALCOLO RATA SIMULATA CON INFLAZIONE ---
                   itemSimulatedInstallment = minInst;
@@ -112,6 +130,8 @@ export const calculateAggregatedSchedule = (
                       const simGain = simGross - itemInvested;
                       const simNet = simGross - (simGain > 0 ? simGain * 0.125 : 0);
                       
+                      itemSimulatedCapital = simNet; // Update capital for simulation
+
                       const r = coeffs.d_rate_gross / 12;
                       const n = 180;
                       
@@ -127,12 +147,17 @@ export const calculateAggregatedSchedule = (
               }
 
               // 4. Generate partial schedule (Standard = Minimo)
+              // Use baseCapitalToUse (Minimum Capital)
+              // 4. Generate partial schedule (Standard = Minimo)
               const { schedule: itemSchedule } = generateAnnuitySchedule(
-                  itemNetAt65, 
+                  baseCapitalToUse, 
                   birthDate, 
                   code, 
                   itemTargetInstallment
               );
+              // Wait, I can just use the variable I defined above but scopes are tricky in replace_file_content if I don't replace everything.
+              // I will use the calculated variable.
+              // Let's Clean up the logic block to be safe.
 
               // 5. Aggregate
               itemSchedule.forEach((row: any, i: number) => {
@@ -148,6 +173,32 @@ export const calculateAggregatedSchedule = (
                   aggregatedSchedule[i].ritenuta += row.ritenuta;
                   aggregatedSchedule[i].bollo += row.bollo;
               });
+
+              // --- 6. Generate Simulated Schedule for detailed view (Bollo/Netto Simulata) ---
+              let simSchedule: any[] = [];
+              if (itemSimulatedInstallment > 0) {
+                 // Use itemSimulatedCapital which reflects the inflated value (simNet)
+                 const res = generateAnnuitySchedule(
+                     itemSimulatedCapital, 
+                     birthDate, 
+                     code, 
+                     itemSimulatedInstallment
+                 );
+                 simSchedule = res.schedule;
+              }
+
+              // Aggregate Simulated Values
+              if (simSchedule.length > 0) {
+                  simSchedule.forEach((row: any, i: number) => {
+                      if (aggregatedSchedule[i]) {
+                          if (!aggregatedSchedule[i].simulatedBollo) aggregatedSchedule[i].simulatedBollo = 0;
+                          if (!aggregatedSchedule[i].simulatedNetRate) aggregatedSchedule[i].simulatedNetRate = 0;
+                          
+                          aggregatedSchedule[i].simulatedBollo += row.bollo;
+                          aggregatedSchedule[i].simulatedNetRate += row.netRate;
+                      }
+                  });
+              }
           });
       }
       return { aggregatedSchedule, globalNetAt65, globalDebugAges };
