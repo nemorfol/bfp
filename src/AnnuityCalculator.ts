@@ -122,7 +122,7 @@ export const calculateAggregatedSchedule = (
                   
                   // --- CALCOLO RATA SIMULATA CON INFLAZIONE ---
                   itemSimulatedInstallment = minInst;
-                  if (code.includes('BO165A')) {
+                  if (code.includes('BO165A') || code.includes('SF165A')) {
                       const durationYears = 65 - itemAge;
                       const infRate = parseFloat(String(inflationRate)) || 0;
                       
@@ -130,18 +130,25 @@ export const calculateAggregatedSchedule = (
                       const simGain = simGross - itemInvested;
                       const simNet = simGross - (simGain > 0 ? simGain * 0.125 : 0);
                       
-                      itemSimulatedCapital = simNet; // Update capital for simulation
+                      // FIX: Simulated Capital must be at least the Minimum Capital
+                      // This ensures that if Inflation < Fixed, we use Fixed Capital (matching Base).
+                      // We use baseCapitalToUse which is already the MinCapital.
+                      itemSimulatedCapital = Math.max(simNet, baseCapitalToUse);
 
                       const r = coeffs.d_rate_gross / 12;
                       const n = 180;
                       
                       let simFrenchInst = 0;
                       if (r > 0) {
-                          simFrenchInst = simNet * r / (1 - Math.pow(1 + r, -n));
+                          // Use the maximized capital for installment calculation consistency
+                          simFrenchInst = itemSimulatedCapital * r / (1 - Math.pow(1 + r, -n));
                       } else {
-                          simFrenchInst = simNet / n;
+                          simFrenchInst = itemSimulatedCapital / n;
                       }
                       
+                      // itemSimulatedInstallment is simply the French Rata of the Simulated Capital
+                      // (which is already Max(min, sim)).
+                      // But to be extra safe with rounding:
                       itemSimulatedInstallment = Math.max(minInst, Math.round(simFrenchInst * 100) / 100);
                   }
               }
