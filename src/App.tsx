@@ -276,10 +276,8 @@ export default function App() {
           // Simulator Coeff
           const coeffs = getCoefficients(ageAtSubscriptionSimulator, code);
           let targetInst = undefined;
-          let rateOverride = undefined;
           if (coeffs) {
               targetInst = totalInvested * coeffs.c_rate;
-              rateOverride = coeffs.d_rate_gross;
           }
           
           const { schedule } = generateAnnuitySchedule(netAt65, birthDate, code, targetInst);
