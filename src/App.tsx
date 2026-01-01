@@ -6,6 +6,16 @@ import AnnuityModal from './AnnuityModal';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getCoefficients as getCoefficientsSF } from './coefficients';
+import { getCoefficientsBO165A } from './coefficients_bo165';
+import { calculateAggregatedSchedule, generateAnnuitySchedule } from './AnnuityCalculator';
+
+const getCoefficients = (age: number, code: string) => {
+    if (code && code.includes('BO165A')) {
+        return getCoefficientsBO165A(age);
+    }
+    return getCoefficientsSF(age);
+};
 
 /**
  * DATI STATICI (Fallback) + Logica Simulazione
@@ -151,7 +161,7 @@ export default function App() {
   const [simulationAmount, setSimulationAmount] = useState(10000);
   const [inflationRate, setInflationRate] = useState(2.0);
   const [customDuration, setCustomDuration] = useState(20);
-  const [birthYear, setBirthYear] = useState(1980); // Default: 45 anni circa
+  const [birthDate, setBirthDate] = useState("1980-01-01"); // Default: 1980-01-01
   const [selectedProducts, setSelectedProducts] = useState(['TF120A', 'TF212A']);
   // Mappa degli importi specifici per prodotto (es. caricati da Excel)
   const [productAmounts, setProductAmounts] = useState<Record<string, number>>({});
@@ -171,69 +181,10 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalProduct, setModalProduct] = useState("");
   const [modalData, setModalData] = useState<any[]>([]);
+  const [modalParams, setModalParams] = useState({ capital: 0, rate: 0, taxRate: 0.125 });
+  const [modalDebugInfo, setModalDebugInfo] = useState("");
 
-  // Helper per generare il piano di ammortamento (Francese)
-  const generateAnnuitySchedule = (netCapitalAt65: number, birthYear: number, productCode: string) => {
-      const schedule = [];
-      
-      // Determina il tasso annuo lordo per la fase di rendita
-      // SF165A: 3.50% fisso
-      // BO165A: Variabile (es. 2.25% - 2.45%). Usiamo 2.35% come media stimata.
-      const annualRate = productCode.includes('SF165') ? 0.035 : 0.0235;
-      
-      // Tasso mensile (radice dodicesima)
-      const monthlyRateCalc = Math.pow(1 + annualRate, 1 / 12) - 1;
-      
-      // Numero rate
-      const n = 180;
 
-      // Calcolo Rata Costante (Formula Francese): R = C * r / (1 - (1+r)^-n)
-      // C = netCapitalAt65
-      const rataCostanteLorda = (netCapitalAt65 * monthlyRateCalc) / (1 - Math.pow(1 + monthlyRateCalc, -n));
-
-      let currentCapital = netCapitalAt65;
-      
-      // Data inizio: Gennaio dell'anno dei 65 anni
-      let currentDate = new Date(birthYear + 65, 0, 1); 
-      
-      for (let i = 1; i <= n; i++) {
-          // Quota Interessi e Quota Capitale
-          const quotaInteressi = currentCapital * monthlyRateCalc;
-          
-          // Tassazione 12.5% sulla quota interessi maturata nel mese
-          const ritenutaInteressi = quotaInteressi * 0.125;
-          
-          // Bollo: 0.20% annuo sul capitale residuo / 12
-          const bollo = (currentCapital * 0.002) / 12;
-          
-          // Rata Netta = Rata Costante - Ritenuta Interessi - Bollo
-          const rataNetta = rataCostanteLorda - ritenutaInteressi - bollo;
-          
-          // Quota Capitale (per abbattere il debito)
-          // Nel metodo francese la rata è costante (interessi + capitale). 
-          // Qui la "Rata Base" che mostriamo è quella lorda (interessi + capitale).
-          const quotaCapitale = rataCostanteLorda - quotaInteressi;
-
-          schedule.push({
-              id: i,
-              date: currentDate.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }),
-              capital: currentCapital,
-              baseRate: rataCostanteLorda, // Rata Francese Lorda
-              quotaInteressi: quotaInteressi,
-              ritenuta: ritenutaInteressi,
-              bollo: bollo,
-              netRate: rataNetta
-          });
-
-          // Riduci capitale residuo
-          currentCapital -= quotaCapitale;
-          if (currentCapital < 0) currentCapital = 0;
-          
-          // Avanza mese
-          currentDate.setMonth(currentDate.getMonth() + 1);
-      }
-      return schedule;
-  };
 
   const openAnnuityModal = (code: string) => {
       const prod = BFP_CATALOG[code];
@@ -272,27 +223,40 @@ export default function App() {
           return;
       }
 
-      // ... logica esistente per annuity (BSFed/BFPO65) ...
+      // --- LOGICA ANNUITY (BSFed/BFPO65) ---
       // Se siamo già oltre i 65 anni o ci arriviamo nel grafico...
-      const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
+      const bDate = new Date(birthDate);
+      const birthYearVal = bDate.getFullYear();
+      const yearsTo65 = 65 - (new Date().getFullYear() - birthYearVal); // Approssimazione annuale per il modal check
       
       let grossAt65 = 0;
       let totalInvested = 0;
-
-      // FIX: Check if we have Portfolio Data for this product to use accurate values
-      // This ensures the Modal matches the Table (calculated from Subscription Date)
-      // instead of simulating a new investment from Today.
+      
       const portfolioItems = portfolioData.filter(p => p.serie === code);
       
+      setModalProduct(prod.name);
+      
+      const currentYear = new Date().getFullYear();
+      let ageAtSubscriptionSimulator = currentYear - birthYearVal; // Default Fallback (Simulator)
+      
+      let aggregatedSchedule: any[] = [];
+      let globalNetAt65 = 0;
+      let globalDebugAges: number[] = [];
+      
       if (portfolioItems.length > 0) {
-          portfolioItems.forEach(p => {
-              grossAt65 += p.valoreScadenza || 0;
-              totalInvested += p.nominale;
-          });
+          const result = calculateAggregatedSchedule(
+              portfolioItems,
+              code,
+              inflationRate,
+              birthDate,
+              ageAtSubscriptionSimulator
+          );
+          aggregatedSchedule = result.aggregatedSchedule;
+          globalNetAt65 = result.globalNetAt65;
+          globalDebugAges = result.globalDebugAges;
       } else {
-          // Fallback: Simulator mode (New Investment from Today)
+          // Fallback: Simulator mode
           totalInvested = invested;
-          
           let limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
           
           const infRate = parseFloat(String(inflationRate));
@@ -302,25 +266,78 @@ export default function App() {
           const valFixed = totalInvested * Math.pow(1 + effectiveFixedRate, limitYear);
           const valInflation = totalInvested * Math.pow(1 + effectiveInflationRate, limitYear);
           grossAt65 = Math.max(valFixed, valInflation);
+          
+          const gain = grossAt65 - totalInvested;
+          const tax = gain > 0 ? gain * 0.125 : 0;
+          const netAt65 = grossAt65 - tax;
+          
+          globalNetAt65 = netAt65;
+          
+          // Simulator Coeff
+          const coeffs = getCoefficients(ageAtSubscriptionSimulator, code);
+          let targetInst = undefined;
+          let rateOverride = undefined;
+          if (coeffs) {
+              targetInst = totalInvested * coeffs.c_rate;
+              rateOverride = coeffs.d_rate_gross;
+          }
+          
+          const { schedule } = generateAnnuitySchedule(netAt65, birthDate, code, targetInst, rateOverride);
+          aggregatedSchedule = schedule;
+          globalDebugAges = [ageAtSubscriptionSimulator];
       }
 
-      // Netto (Tassazione 12.5% sul gain)
-      const gain = grossAt65 - totalInvested;
-      const tax = gain > 0 ? gain * 0.125 : 0;
-      const netAt65 = grossAt65 - tax;
-
-      // Passo il codice prodotto per scegliere il tasso corretto
-      const schedule = generateAnnuitySchedule(netAt65, birthYear, code);
-      setModalProduct(prod.name);
-      setModalData(schedule);
+      setModalData(aggregatedSchedule);
+      // Hack: For simulator params we pass defaults, but modal is read-only for schedule mostly. 
+      // We pass 1st item rate or average? 
+      // Just pass 0 params to avoid confusion or keep existing?
+      // params are used for "Recalculate" which might be broken for aggregated view.
+      // But user just views it.
+      setModalParams({ capital: globalNetAt65, rate: 0, taxRate: 0.125 });
+      
+      let debugStr = "";
+      const tableUsed = code.includes('BO165A') ? 'BO165A' : 'SF165A';
+      if (portfolioItems.length > 0) {
+          const uniqueAges = Array.from(new Set(globalDebugAges)).sort();
+          // Debugging Sums
+          let totMin = 0;
+          let totNom = 0;
+          let totNet = 0;
+          portfolioItems.forEach(p => {
+               totNom += p.nominale;
+               // Estimate Net for debug
+               const iGross = p.valoreScadenza || 0;
+               const iGain = iGross - p.nominale;
+               const iNet = iGross - (iGain > 0 ? iGain * 0.125 : 0);
+               totNet += iNet;
+               
+               let itemAge = currentYear - birthYearVal;
+               if (p.dataSottoscrizione && !isNaN(new Date(p.dataSottoscrizione).getTime())) {
+                   itemAge = (new Date(p.dataSottoscrizione).getTime() - new Date(birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+               }
+               const c = getCoefficients(itemAge, code);
+               if (c) totMin += p.nominale * c.c_rate;
+          });
+          
+          const firstInst = aggregatedSchedule.length > 0 ? (aggregatedSchedule[0].capital + aggregatedSchedule[0].quotaInteressi) : 0;
+          
+          debugStr = `[${tableUsed}] Nom: €${totNom.toFixed(0)} | Net65: €${totNet.toFixed(0)} | Min: €${totMin.toFixed(2)} | Calc: €${firstInst.toFixed(2)} | Età: ${uniqueAges.map(a => a.toFixed(2)).join(', ')}`;
+      } else {
+          debugStr = `[${tableUsed}] Simulazione`;
+      }
+      setModalDebugInfo(debugStr);
       setIsModalOpen(true);
   };
+
+
 
   // --- LOGICA DI CALCOLO ---
   const comparisonData = useMemo(() => {
     const data = [];
     const currentYear = new Date().getFullYear();
-    const userAge = currentYear - birthYear;
+    const bDate = new Date(birthDate);
+    const birthYearVal = !isNaN(bDate.getTime()) ? bDate.getFullYear() : 1980;
+    const userAge = currentYear - birthYearVal;
     
     for (let year = 0; year <= customDuration; year++) {
       const point: any = { year };
@@ -446,7 +463,7 @@ export default function App() {
       data.push(point);
     }
     return data;
-  }, [simulationAmount, inflationRate, customDuration, selectedProducts, birthYear, reinvestExpired, productAmounts]);
+  }, [simulationAmount, inflationRate, customDuration, selectedProducts, birthDate, reinvestExpired, productAmounts]);
 
   // --- UPLOAD EXCEL ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -498,7 +515,7 @@ export default function App() {
     useEffect(() => {
         if (rawImportData.length === 0) return;
         recalculatePortfolio(rawImportData);
-    }, [rawImportData, birthYear, inflationRate]);
+    }, [rawImportData, birthDate, inflationRate]);
 
     const processPortfolioData = (data: any[]) => {
         setRawImportData(data);
@@ -596,6 +613,9 @@ export default function App() {
                 const isAnnuity = item && item.type === 'annuity';
                 const isInflation = item && item.type === 'inflation_linked';
                 
+                // Lifted from inner blocks to be available for final object creation
+                const parsedSub = parseDate(row[keySottoscrizione!]);
+
                 if (overrideValue > 0 && !isAnnuity && !isInflation) {
                     valoreScadenza = overrideValue;
                 } else if (item) {
@@ -618,7 +638,7 @@ export default function App() {
                              // Here we just calc multiplier (1+Inf)^Years
                              
                              // Calculate duration similar to Annuity
-                             const parsedSub = parseDate(row[keySottoscrizione!]);
+                             // const parsedSub = parseDate(row[keySottoscrizione!]); // Lifted up
                              const parsedMat = parseDate(row[keyScadenza!]);
                              
                              if (parsedSub && parsedMat) {
@@ -636,12 +656,14 @@ export default function App() {
                         const now = new Date();
                         let maturityDate = now;
                         let subDate = now;
-                        const parsedSub = parseDate(row[keySottoscrizione!]); 
+                        // const parsedSub = parseDate(row[keySottoscrizione!]); // Lifted up 
                         
                         // FIX: Force Maturity to Age 65 for Annuities (SF165/BO165)
                         // The Excel "Scadenza" might be Age 80 (end of annuity payments), causing extra compounding.
                         // We must stop compounding at Age 65.
-                        maturityDate = new Date(birthYear + 65, 11, 31); 
+                        const bDate = new Date(birthDate);
+                        const bYear = !isNaN(bDate.getTime()) ? bDate.getFullYear() : 1980;
+                        maturityDate = new Date(bYear + 65, bDate.getMonth(), bDate.getDate()); 
                         
                         if (parsedSub) subDate = parsedSub;
                         
@@ -650,9 +672,11 @@ export default function App() {
                         const msDiff = maturityDate.getTime() - subDate.getTime();
                         const totalYears = msDiff / (1000 * 60 * 60 * 24 * 365.25);
                         
-                        // *** CRITICAL CHANGE: Use CURRENT birthYear state ***
+                        // *** CRITICAL CHANGE: Use CURRENT birthDate state ***
                         const subYear = subDate.getFullYear();
-                        const ageAtSub = subYear - birthYear; 
+                        const bDateForSub = new Date(birthDate);
+                        const bYearForSub = !isNaN(bDateForSub.getTime()) ? bDateForSub.getFullYear() : 1980;
+                        const ageAtSub = subYear - bYearForSub; 
 
                         let annualRate = 0.01;
                         if (serieCode === 'SF165A') {
@@ -685,6 +709,7 @@ export default function App() {
                     serie: serieCode,
                     serieRaw: serieRaw,
                     scadenza: row[keyScadenza!],
+                    dataSottoscrizione: parsedSub ? parsedSub.toISOString() : null,
                     nominale: nominale || 0,
                     valoreAttuale: valore || 0,
                     valoreScadenza: valoreScadenza,
@@ -727,8 +752,10 @@ export default function App() {
         setCustomDuration(yearsFromNow > 0 ? yearsFromNow + 1 : 20);
 
         // Only auto-set birth year if we are processing the FIRST time (or if still default)
-        if (estimatedBirthYear && birthYear === 1980) {
-             setBirthYear(estimatedBirthYear);
+        // If inferred birth year (estimatedBirthYear) is available and current is default 1980-01-01
+        if (estimatedBirthYear && birthDate === "1980-01-01") {
+             // Set to Jan 1st of the estimated year
+             setBirthDate(`${estimatedBirthYear}-01-01`);
         }
         
         if (parsed.length > 0 && activeTab === 'comparator' && rawImportData.length === 0) {
@@ -792,7 +819,7 @@ export default function App() {
         { Parametro: "Capitale Iniziale", Valore: simulationAmount },
         { Parametro: "Inflazione Stimata", Valore: `${inflationRate}%` },
         { Parametro: "Durata", Valore: `${customDuration} anni` },
-        { Parametro: "Anno Nascita", Valore: birthYear },
+        { Parametro: "Data Nascita", Valore: birthDate },
         { Parametro: "Reinvestimento a Scadenza", Valore: reinvestExpired ? "Sì" : "No" }
     ];
 
@@ -836,7 +863,9 @@ export default function App() {
         const prod = BFP_CATALOG[code];
         if (prod.type === 'annuity') {
             const invested = productAmounts[code] !== undefined ? productAmounts[code] : simulationAmount;
-            const yearsTo65 = 65 - (new Date().getFullYear() - birthYear);
+            const bDate = new Date(birthDate);
+            const bYear = !isNaN(bDate.getTime()) ? bDate.getFullYear() : 1980;
+            const yearsTo65 = 65 - (new Date().getFullYear() - bYear);
             if (yearsTo65 + new Date().getFullYear() <= new Date().getFullYear() + customDuration) {
                  const limitYear = yearsTo65 > 0 ? yearsTo65 : 0;
                  const infRate = parseFloat(String(inflationRate));
@@ -847,7 +876,7 @@ export default function App() {
                     invested * Math.pow(1 + effInf, limitYear)
                  );
                  const net = gross - ((gross - invested) * 0.125);
-                 const schedule = generateAnnuitySchedule(net, birthYear, code);
+                 const schedule = generateAnnuitySchedule(net, birthDate, code);
                  
                  const scheduleRows = schedule.map(s => ({
                      "N. Rata": s.id,
@@ -981,11 +1010,12 @@ export default function App() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase">Anno di Nascita</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase">Data di Nascita</label>
               <input 
-                type="number" min="1920" max={new Date().getFullYear()} value={birthYear}
-                onChange={(e) => setBirthYear(parseInt(e.target.value))}
-                className="mt-1 w-24 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-slate-800"
+                type="date" 
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="mt-1 w-32 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-slate-800"
               />
             </div>
             <div className="text-sm text-slate-500 max-w-xs leading-tight hidden md:block">
@@ -1159,7 +1189,7 @@ export default function App() {
                       <th className="px-6 py-3 text-right">Netto Finale</th>
                       <th className="px-6 py-3 text-right">Reale Finale</th>
                       <th className="px-6 py-3 text-right">Guadagno Reale</th>
-                      <th className="px-6 py-3 text-right bg-blue-50 text-blue-800">Rata Mensile (Stima 15y)</th>
+                      <th className="px-6 py-3 text-right bg-blue-50 text-blue-800">Rata Mensile (Base)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1192,8 +1222,10 @@ export default function App() {
                       
                       // Calcolo Rata solo per prodotti Annuity e solo se si è raggiunta l'età di 65 anni
                       const currentYear = new Date().getFullYear();
+                      const bDate = new Date(birthDate);
+                      const bYear = !isNaN(bDate.getTime()) ? bDate.getFullYear() : 1980;
                       // Per la rata usiamo la durata del prodotto se è annuity, o l'ultimo anno valido
-                      const userAgeAtEnd = (currentYear - birthYear) + finalData.year; 
+                      const userAgeAtEnd = (currentYear - bYear) + finalData.year; 
                       const isAnnuity = BFP_CATALOG[code].type === 'annuity';
                       const canReceiveAnnuity = isAnnuity && userAgeAtEnd >= 65;
                       let monthlyRate = 0;
@@ -1201,26 +1233,53 @@ export default function App() {
                           // FIX: Use Portfolio Data for accurate Capital at 65 (calculated from subscription)
                           // instead of the Simulator's "New Investment" value.
                           const portItems = portfolioData.filter(p => p.serie === code);
-                          let netAt65 = nominal; // Fallback to Simulator Net
+                          const ageSim = currentYear - bYear;
                           
-                          if (portItems.length > 0) {
-                              const grossAt65 = portItems.reduce((sum, p) => sum + (p.valoreScadenza || 0), 0);
-                              const gain = grossAt65 - invested;
-                              netAt65 = grossAt65 - (gain > 0 ? gain * 0.125 : 0);
+                          // Use Calculator logic for consistency
+                          const { aggregatedSchedule } = calculateAggregatedSchedule(
+                              portItems,
+                              code,
+                              inflationRate,
+                              birthDate,
+                              ageSim
+                          );
+                          
+                          if (aggregatedSchedule && aggregatedSchedule.length > 0) {
+                              // User wants "Rata Base" (Gross/Base)
+                              monthlyRate = aggregatedSchedule[0].baseRate;
+                          } else {
+                              // Fallback if no items or calc failed (e.g. pure simulation)
+                              // If pure simulation (portItems empty), calculateAggregatedSchedule returns based on ageSim coeff
+                              // But wait, calculateAggregatedSchedule handles empty items?
+                              // Let's check logic: if portfolioItems.length > 0 ... else ...
+                              // We need to pass a single simulated item if empty?
+                              // Actually comparisonData logic uses nominal.
+                              // For simplicity in this view, if portItems is empty, we stick to null or basic fallback.
+                              // But the loop defines portItems via filter. 
+                              // If it's empty, we might skip or calculate generic.
+                              // Existing logic was: if (canReceiveAnnuity)... 
+                              // If portItems empty, it used nominal (from comparisonData).
+                              
+                              if (portItems.length === 0 && nominal > 0) {
+                                  // Generic Simulator Case
+                                  // Can call calculator with a "fake" item?
+                                  // calculateAggregatedSchedule logic for empty items is: returns empty?
+                                  // Let's look at AnnuityCalculator.ts...
+                                  // It returns empty objects if items empty.
+                                  // So for purely simulated rows (no portfolio), we might need manual calc or fake item.
+                                  // But "Rata Mensile" usually implies real portfolio items in this context?
+                                  // If it's a generic simulator, we can create a fake item.
+                                  const fakeItem = { nominale: nominal, valoreScadenza: nominal, dataSottoscrizione: null };
+                                  const { aggregatedSchedule: simSched } = calculateAggregatedSchedule(
+                                      [fakeItem],
+                                      code,
+                                      inflationRate,
+                                      birthDate,
+                                      ageSim
+                                  );
+                                  if (simSched.length > 0) monthlyRate = simSched[0].baseRate;
+                              }
                           }
-                          
-                          const annualRateRec = code.includes('SF165') ? 0.035 : 0.0235;
-                          const rateM = Math.pow(1 + annualRateRec, 1/12) - 1;
-                          const n = 180;
-                          
-                          // Rata Francese Costante (Lorda)
-                          const rataLorda = (netAt65 * rateM) / (1 - Math.pow(1 + rateM, -n));
-                          
-                          // Calcolo Prima Rata Netta (per stima realistica)
-                          const qI = netAt65 * rateM;
-                          const rit = qI * 0.125;
-                          const bollo = (netAt65 * 0.002) / 12;
-                          monthlyRate = rataLorda - rit - bollo;
                       }
 
                       return (
@@ -1386,6 +1445,8 @@ export default function App() {
                 onClose={() => setIsModalOpen(false)} 
                 productName={modalProduct}
                 data={modalData}
+                params={modalParams}
+                debugInfo={modalDebugInfo}
               />
             </div>
           );

@@ -5,9 +5,14 @@ interface AnnuityModalProps {
   onClose: () => void;
   productName: string;
   data: any[];
+  params: { capital: number; rate: number; taxRate: number };
+  onUpdateParams?: (newParams: any) => void;
+  debugInfo?: string;
 }
 
-export default function AnnuityModal({ isOpen, onClose, productName, data }: AnnuityModalProps) {
+const DEFAULT_PARAMS = { capital: 0, rate: 0, taxRate: 0.125 };
+
+export default function AnnuityModal({ isOpen, onClose, productName, data, params = DEFAULT_PARAMS, debugInfo }: AnnuityModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -18,9 +23,19 @@ export default function AnnuityModal({ isOpen, onClose, productName, data }: Ann
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
           <div>
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Calendar className="text-blue-600"/> Piano Rendita: {productName}
+              <Calendar className="text-blue-600"/> Piano Rendita: {productName} 
+              {debugInfo && <span className="text-xs font-normal text-slate-400 ml-2">({debugInfo})</span>}
             </h2>
-            <p className="text-sm text-slate-500 mt-1">Dettaglio delle 180 rate mensili (65-80 anni)</p>
+            <div className="flex items-center gap-4 mt-2 h-8">
+                <div className="text-sm text-slate-600 flex items-center gap-3">
+                    <span title="Capitale convertito in rendita">
+                        Capitale: <strong>€ {new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 }).format(params.capital)}</strong>
+                    </span>
+                    <span title="Tasso Tecnico Annuo (utilizzato per il calcolo della rata)">
+                        Tasso Tecnico: <strong>{(params.rate * 100).toFixed(2)}%</strong>
+                    </span>
+                </div>
+            </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
             <X size={24} className="text-slate-500"/>
@@ -38,13 +53,13 @@ export default function AnnuityModal({ isOpen, onClose, productName, data }: Ann
              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
                  <div className="text-xs text-red-600 uppercase font-bold">Totale Bolli Stimati</div>
                  <div className="text-lg font-bold text-red-900">
-                    € {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(data.reduce((acc, row) => acc + row.bollo, 0))}
+                    € {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(data.reduce((acc: any, row: any) => acc + row.bollo, 0))}
                  </div>
              </div>
              <div className="p-3 bg-green-50 rounded-lg border border-green-100">
                  <div className="text-xs text-green-600 uppercase font-bold">Totale Netto Incassato</div>
                  <div className="text-lg font-bold text-green-900">
-                    € {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(data.reduce((acc, row) => acc + row.netRate, 0))}
+                    € {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(data.reduce((acc: any, row: any) => acc + row.netRate, 0))}
                  </div>
              </div>
              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
@@ -62,8 +77,9 @@ export default function AnnuityModal({ isOpen, onClose, productName, data }: Ann
                 <th className="px-6 py-3">Data</th>
                 <th className="px-6 py-3 text-right">Capitale Residuo</th>
                 <th className="px-6 py-3 text-right text-blue-700">Rata Base</th>
+                <th className="px-6 py-3 text-right text-amber-600" title="Rata ricalcolata con inflazione simulata">Rata Simulata</th>
                 <th className="px-6 py-3 text-right text-red-600" title="Imposta di Bollo (0.20% annuo)">Bollo*</th>
-                <th className="px-6 py-3 text-right text-green-700 font-bold bg-green-50/50">Rata Netta</th>
+                <th className="px-6 py-3 text-right text-green-700 font-bold bg-green-50/50">Rata Netta (Min)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -73,6 +89,7 @@ export default function AnnuityModal({ isOpen, onClose, productName, data }: Ann
                   <td className="px-6 py-3 font-medium text-slate-800">{row.date}</td>
                   <td className="px-6 py-3 text-right font-mono">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.capital)}</td>
                   <td className="px-6 py-3 text-right text-blue-700">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.baseRate)}</td>
+                  <td className="px-6 py-3 text-right text-amber-600 font-medium">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.simulatedRate || row.netRate)}</td>
                   <td className="px-6 py-3 text-right text-red-600 text-xs">- € {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.bollo)}</td>
                   <td className="px-6 py-3 text-right font-bold text-green-700 bg-green-50/30">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.netRate)}</td>
                 </tr>
