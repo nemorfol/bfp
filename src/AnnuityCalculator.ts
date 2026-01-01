@@ -28,7 +28,7 @@ export const generateAnnuitySchedule = (netCapitalAt65: number, birthDateStr: st
           const ritenutaInteressi = quotaInteressi * 0.125;
           const bollo = (currentCapital * 0.002) / 12;
           
-          const rataNetta = rataCostanteLorda - ritenutaInteressi - bollo;
+          const rataNetta = rataCostanteLorda - bollo;
 
           const quotaCapitale = rataCostanteLorda - quotaInteressi;
 
