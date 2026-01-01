@@ -1,12 +1,18 @@
 import { getCoefficients as getCoefficientsSF } from './coefficients';
 import { getCoefficientsBO165A } from './coefficients_bo165';
 
+// Helper per identificare i prodotti
+const isObiettivo65 = (code: string) => code && (code.includes('BO165') || code.includes('BFPO65') || code.includes('OBIETTIVO 65'));
+const isSoluzioneFuturo = (code: string) => code && (code.includes('SF165') || code.includes('BSF') || code.includes('SOLUZIONE FUTURO'));
+
 const getCoefficients = (age: number, code: string) => {
-    if (code && code.includes('BO165A')) {
+    if (isObiettivo65(code)) {
         return getCoefficientsBO165A(age);
     }
-    return getCoefficientsSF(age);
+    return getCoefficientsSF(age); // Default to SF (check validity?)
 };
+
+
 
 // Helper per generare il piano di ammortamento
 export const generateAnnuitySchedule = (netCapitalAt65: number, birthDateStr: string, productCode: string, targetInstallment?: number) => {
@@ -115,17 +121,24 @@ export const calculateAggregatedSchedule = (
                   // This is the Capital required to generate minInst at fixed rate
                   const minCapitalAt65 = minInst / factor_min;
                   
-                  if (code.includes('BO165A') || code.includes('SF165A')) {
+                  // Determine if we need to enforce Fixed Rate Logic
+                  const isO65 = isObiettivo65(code);
+                  const isSF = isSoluzioneFuturo(code); // Now used correctly
+
+                  if (isO65 || isSF) {
                       // Override with Minimum Capital for Base Schedule
                       baseCapitalToUse = minCapitalAt65;
                   }
                   
+
+
                   // --- CALCOLO RATA SIMULATA CON INFLAZIONE ---
                   itemSimulatedInstallment = minInst;
-                  if (code.includes('BO165A') || code.includes('SF165A')) {
+                  if (isO65 || isSF) {
                       const durationYears = 65 - itemAge;
                       const infRate = parseFloat(String(inflationRate)) || 0;
                       
+                      // Calculate SIMULATED Gross Capital using Inflation
                       const simGross = itemInvested * Math.pow(1 + infRate/100, durationYears);
                       const simGain = simGross - itemInvested;
                       const simNet = simGross - (simGain > 0 ? simGain * 0.125 : 0);
