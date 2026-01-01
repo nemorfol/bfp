@@ -77,9 +77,13 @@ export default function AnnuityModal({ isOpen, onClose, productName, data, param
                 <th className="px-6 py-3">Data</th>
                 <th className="px-6 py-3 text-right">Capitale Residuo</th>
                 <th className="px-6 py-3 text-right text-blue-700">Rata Base</th>
-                <th className="px-6 py-3 text-right text-amber-600" title="Rata ricalcolata con inflazione simulata">Rata Simulata</th>
-                <th className="px-6 py-3 text-right text-red-600" title="Imposta di Bollo (0.20% annuo)">Bollo*</th>
-                <th className="px-6 py-3 text-right text-green-700 font-bold bg-green-50/50">Rata Netta (Min)</th>
+                <th className="px-6 py-3 text-right text-red-600" title="Imposta di Bollo (0.20% annuo)">Bollo</th>
+                <th className="px-6 py-3 text-right text-green-700 font-bold bg-green-50/50">Rata Netta</th>
+                
+                {/* Colonne Simulate Extra se presenti dati simulati */}
+                <th className="px-6 py-3 text-right text-amber-600 border-l border-amber-100 bg-amber-50/10" title="Rata ricalcolata con inflazione simulata">Rata Sim.</th>
+                <th className="px-6 py-3 text-right text-amber-500 font-normal border-l border-amber-100 bg-amber-50/20" title="Bollo sulla rendita simulata">Bollo Sim.</th>
+                <th className="px-6 py-3 text-right text-amber-700 font-bold border-l border-amber-100 bg-amber-50/50">Netto Sim.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -89,9 +93,17 @@ export default function AnnuityModal({ isOpen, onClose, productName, data, param
                   <td className="px-6 py-3 font-medium text-slate-800">{row.date}</td>
                   <td className="px-6 py-3 text-right font-mono">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.capital)}</td>
                   <td className="px-6 py-3 text-right text-blue-700">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.baseRate)}</td>
-                  <td className="px-6 py-3 text-right text-amber-600 font-medium">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.simulatedRate || row.netRate)}</td>
                   <td className="px-6 py-3 text-right text-red-600 text-xs">- € {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.bollo)}</td>
                   <td className="px-6 py-3 text-right font-bold text-green-700 bg-green-50/30">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.netRate)}</td>
+                  
+                  {/* Dati Simulati */}
+                  <td className="px-6 py-3 text-right text-amber-600 font-medium border-l border-slate-100 bg-amber-50/10">€ {new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.simulatedRate || 0)}</td>
+                  <td className="px-6 py-3 text-right text-amber-500 text-xs border-l border-slate-100 bg-amber-50/10">
+                     {row.simulatedBollo ? `- € ${new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.simulatedBollo)}` : '-'}
+                  </td>
+                  <td className="px-6 py-3 text-right font-bold text-amber-700 border-l border-slate-100 bg-amber-50/30">
+                     {row.simulatedNetRate ? `€ ${new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2 }).format(row.simulatedNetRate)}` : '-'}
+                  </td>
                 </tr>
               ))}
             </tbody>
