@@ -99,16 +99,14 @@ export const calculateAggregatedSchedule = (
               
               const coeffs = getCoefficients(itemAge, code);
               let itemTargetInstallment = undefined;
-              let itemRate = undefined;
-              let itemSimulatedInstallment = 0; // Declared here to fix ReferenceError
+              let itemSimulatedInstallment = 0;
               
               if (coeffs) {
                   // 1. Minimum (or Fixed) Installment
                   const rawMinInst = itemInvested * coeffs.c_rate;
                   const minInst = Math.round(rawMinInst * 100) / 100;
                   
-                  itemTargetInstallment = minInst;
-                  itemRate = coeffs.d_rate_gross; 
+                  itemTargetInstallment = minInst; 
                   
                   // --- CALCOLO RATA SIMULATA CON INFLAZIONE ---
                   itemSimulatedInstallment = minInst;

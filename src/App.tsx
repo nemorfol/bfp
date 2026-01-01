@@ -282,7 +282,7 @@ export default function App() {
               rateOverride = coeffs.d_rate_gross;
           }
           
-          const { schedule } = generateAnnuitySchedule(netAt65, birthDate, code, targetInst, rateOverride);
+          const { schedule } = generateAnnuitySchedule(netAt65, birthDate, code, targetInst);
           aggregatedSchedule = schedule;
           globalDebugAges = [ageAtSubscriptionSimulator];
       }
@@ -876,7 +876,7 @@ export default function App() {
                     invested * Math.pow(1 + effInf, limitYear)
                  );
                  const net = gross - ((gross - invested) * 0.125);
-                 const schedule = generateAnnuitySchedule(net, birthDate, code);
+                 const { schedule } = generateAnnuitySchedule(net, birthDate, code);
                  
                  const scheduleRows = schedule.map(s => ({
                      "N. Rata": s.id,
