@@ -28,13 +28,7 @@ export const generateAnnuitySchedule = (netCapitalAt65: number, birthDateStr: st
           const ritenutaInteressi = quotaInteressi * 0.125;
           const bollo = (currentCapital * 0.002) / 12;
           
-          let rataNetta = 0;
-          if (targetInstallment) {
-             // Se targetInstallment deriva da c_rate (netto), allora la rata NETTA è quella.
-             rataNetta = targetInstallment;
-          } else {
-             rataNetta = rataCostanteLorda - ritenutaInteressi - bollo;
-          }
+          const rataNetta = rataCostanteLorda - ritenutaInteressi - bollo;
 
           const quotaCapitale = rataCostanteLorda - quotaInteressi;
 
