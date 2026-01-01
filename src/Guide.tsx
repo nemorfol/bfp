@@ -144,6 +144,18 @@ export default function Guide() {
             <li><strong>Tabella B:</strong> I tassi vengono applicati coerentemente con l'età di sottoscrizione (Tabella B dei Fogli Informativi).</li>
         </ul>
 
+        <SubTitle>Dettaglio Rendita (Base vs Simulata)</SubTitle>
+        <p>
+            Cliccando sull'icona <Highlight>Lista</Highlight> nella tabella, aprirai il dettaglio mensile che ora mostra due scenari affiancati:
+        </p>
+        <ul className="list-disc pl-5 mt-2 space-y-1 text-sm">
+            <li><strong>Rata Netta (Base):</strong> Calcolata sul <em>Capitale Minimo Garantito</em> (Rendimento Fisso: 1.5% per Soluzione Futuro, 0.5% per Obiettivo 65). Questa è la cifra sicura che percepirai comunque.</li>
+            <li><strong>Rata Netta (Simulata):</strong> Calcolata ipotizzando che l'inflazione sia quella impostata (es. 2%).
+                <br/>
+                <em className="text-xs text-blue-600">Nota: Il sistema applica intelligentemente un "Floor": se l'inflazione impostata è inferiore al tasso minimo garantito, la simulazione si allineerà automaticamente al valore base, perché non puoi mai prendere meno del minimo.</em>
+            </li>
+        </ul>
+
         <SubTitle>Caricamento ed Esportazione Excel</SubTitle>
         <ul className="list-disc pl-5 mt-2 space-y-1 text-sm">
             <li><strong>Override Manuale:</strong> Se il tuo file Excel contiene una colonna <em>"VALORE LORDO A SCADENZA"</em>, il sistema userà quel valore prioritariamente (salvo per i prodotti previdenziali che vengono ricalcolati).</li>
